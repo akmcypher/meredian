@@ -1,6 +1,12 @@
 -- Transactional regression: effective grants and newly created functions.
 BEGIN;
 DO $$ DECLARE fn text; BEGIN
+ IF has_function_privilege('anon','public.provision_workspace_for_user(uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: provision_workspace_for_user(uuid)'; END IF;
+ IF has_function_privilege('authenticated','public.provision_workspace_for_user(uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: provision_workspace_for_user(uuid)'; END IF;
+ IF has_function_privilege('anon','public.provision_verified_user()','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: provision_verified_user()'; END IF;
+ IF has_function_privilege('authenticated','public.provision_verified_user()','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: provision_verified_user()'; END IF;
+ IF has_function_privilege('anon','public.require_active_subject(uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: require_active_subject(uuid)'; END IF;
+ IF has_function_privilege('authenticated','public.require_active_subject(uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: require_active_subject(uuid)'; END IF;
  IF has_function_privilege('anon','public.admin_audit_block()','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: admin_audit_block()'; END IF;
  IF has_function_privilege('authenticated','public.admin_audit_block()','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: admin_audit_block()'; END IF;
  IF has_function_privilege('anon','public.admin_audit_chain()','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: admin_audit_chain()'; END IF;

@@ -12,7 +12,7 @@ Workspace owners/admins can edit workspace settings within their permissions. Sw
 
 ## Native files
 
-Open **Data**, choose an upload, inspect its preview, name the table and choose **Create table**. CSV/TSV, Parquet, Avro, JSON/JSONL/NDJSON are supported. Native previews are bounded to 5,000 rows. Check inferred columns and data before saving. These tables are separate from Connect's raw Bronze snapshots. Table names must currently be unique across users.
+Open **Data**, choose an upload, inspect its preview, name the table and choose **Create table**. CSV/TSV, Parquet, Avro, JSON/JSONL/NDJSON are supported. Native previews are bounded to 5,000 rows. Check inferred columns and data before saving. These tables are separate from Connect's raw Bronze snapshots. Table names must be unique within a workspace.
 
 ## REST pulls
 
