@@ -1,0 +1,25 @@
+Meridian Community
+Copyright 2026 The Meridian authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes software developed by third parties under their own licences, listed in
+THIRD_PARTY_NOTICES, including:
+
+- shadcn/ui component sources (MIT), copied into src/components/ui and modified.
+- npm packages bundled into the built application (MIT, ISC, BSD, Apache-2.0 and other
+  permissive licences; caniuse-lite data under CC-BY-4.0).
+
+The deploy/ directory contains build files for separately run workers and test services. The
+images they pull (PostgreSQL, MySQL, Kafka and others) are not part of this product and keep
+their own licences; the Python workers depend on psycopg under LGPL-3.0.
+
+Project Naming Notice
+
+Meridian is the provisional name of this open-source community project. The project name,
+branding, and associated visual identity may change as the project evolves and before any future
+commercial or enterprise release.
+
+The current name is used for development, community collaboration, and preview distribution.
+It does not imply affiliation with, endorsement by, or sponsorship from any other organization
+using a similar name.

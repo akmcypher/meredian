@@ -1,0 +1,815 @@
+THIRD-PARTY SOFTWARE NOTICES
+
+Meridian Community is licensed under the Apache License 2.0 (see LICENSE and NOTICE). It
+includes or depends on the third-party software listed below, each under its own licence.
+Generated from the dependency manifests; do not edit by hand.
+
+1. npm packages in the built application (production dependency closure)
+
+@ai-sdk/gateway@4.0.127  Apache-2.0  https://github.com/vercel/ai
+@ai-sdk/mcp@2.0.85  Apache-2.0  https://github.com/vercel/ai
+@ai-sdk/openai@4.0.106  Apache-2.0  https://github.com/vercel/ai
+@ai-sdk/provider@4.0.34  Apache-2.0  https://github.com/vercel/ai
+@ai-sdk/provider@4.0.35  Apache-2.0  https://github.com/vercel/ai
+@ai-sdk/provider-utils@5.0.69  Apache-2.0  https://github.com/vercel/ai
+@ai-sdk/provider-utils@5.0.72  Apache-2.0  https://github.com/vercel/ai
+@ai-sdk/react@4.0.158  Apache-2.0  https://github.com/vercel/ai
+@antfu/install-pkg@2.1.0  MIT  https://github.com/antfu-collective/install-pkg
+@babel/code-frame@7.29.7  MIT  https://github.com/babel/babel
+@babel/compat-data@7.29.7  MIT  https://github.com/babel/babel
+@babel/core@7.29.7  MIT  https://github.com/babel/babel
+@babel/generator@7.29.7  MIT  https://github.com/babel/babel
+@babel/generator@7.29.8  MIT  https://github.com/babel/babel
+@babel/helper-compilation-targets@7.29.7  MIT  https://github.com/babel/babel
+@babel/helper-globals@7.29.7  MIT  https://github.com/babel/babel
+@babel/helper-module-imports@7.29.7  MIT  https://github.com/babel/babel
+@babel/helper-module-transforms@7.29.7  MIT  https://github.com/babel/babel
+@babel/helper-string-parser@7.29.7  MIT  https://github.com/babel/babel
+@babel/helper-validator-identifier@7.29.7  MIT  https://github.com/babel/babel
+@babel/helper-validator-option@7.29.7  MIT  https://github.com/babel/babel
+@babel/helpers@7.29.7  MIT  https://github.com/babel/babel
+@babel/parser@7.29.7  MIT  https://github.com/babel/babel
+@babel/parser@7.29.9  MIT  https://github.com/babel/babel
+@babel/runtime@7.29.7  MIT  https://github.com/babel/babel
+@babel/template@7.29.7  MIT  https://github.com/babel/babel
+@babel/traverse@7.29.7  MIT  https://github.com/babel/babel
+@babel/types@7.29.7  MIT  https://github.com/babel/babel
+@babel/types@7.29.8  MIT  https://github.com/babel/babel
+@braintree/sanitize-url@7.1.2  MIT  https://github.com/braintree/sanitize-url
+@chevrotain/types@11.1.2  Apache-2.0  git://github.com/Chevrotain/chevrotain
+@date-fns/tz@1.5.0  MIT  https://github.com/date-fns/date-fns
+@emnapi/core@2.0.0-alpha.3  MIT  https://github.com/toyobayashi/emnapi
+@emnapi/runtime@2.0.0-alpha.3  MIT  https://github.com/toyobayashi/emnapi
+@emnapi/wasi-threads@2.0.1  MIT  https://github.com/toyobayashi/emnapi
+@floating-ui/core@1.8.0  MIT  https://github.com/floating-ui/floating-ui
+@floating-ui/dom@1.8.0  MIT  https://github.com/floating-ui/floating-ui
+@floating-ui/react-dom@2.1.9  MIT  https://github.com/floating-ui/floating-ui
+@floating-ui/utils@0.2.12  MIT  https://github.com/floating-ui/floating-ui
+@hookform/resolvers@5.5.7  MIT  https://github.com/react-hook-form/resolvers
+@iconify/types@2.0.0  MIT  https://github.com/iconify/iconify
+@iconify/utils@3.1.7  MIT  https://github.com/iconify/iconify
+@isaacs/ttlcache@1.4.1  ISC  https://github.com/isaacs/ttlcache
+@jest/schemas@29.6.3  MIT  https://github.com/jestjs/jest
+@jest/types@29.6.3  MIT  https://github.com/jestjs/jest
+@jridgewell/gen-mapping@0.3.13  MIT  https://github.com/jridgewell/sourcemaps
+@jridgewell/remapping@2.3.5  MIT  https://github.com/jridgewell/sourcemaps
+@jridgewell/resolve-uri@3.1.2  MIT  https://github.com/jridgewell/resolve-uri
+@jridgewell/source-map@0.3.11  MIT  https://github.com/jridgewell/sourcemaps
+@jridgewell/sourcemap-codec@1.5.5  MIT  https://github.com/jridgewell/sourcemaps
+@jridgewell/trace-mapping@0.3.31  MIT  https://github.com/jridgewell/sourcemaps
+@mermaid-js/parser@1.2.1  MIT  https://github.com/mermaid-js/mermaid
+@napi-rs/wasm-runtime@1.2.0  MIT  https://github.com/napi-rs/napi-rs
+@noble/hashes@2.4.0  MIT  https://github.com/paulmillr/noble-hashes
+@oozcitak/dom@2.0.2  MIT  git://github.com/oozcitak/dom
+@oozcitak/infra@2.0.2  MIT  https://github.com/oozcitak/infra
+@oozcitak/url@3.0.0  MIT  https://github.com/oozcitak/url
+@oozcitak/util@10.0.0  MIT  git://github.com/oozcitak/util
+@oxc-project/types@0.142.0  MIT  https://github.com/oxc-project/oxc
+@radix-ui/number@1.1.3  MIT  https://github.com/radix-ui/primitives
+@radix-ui/primitive@1.1.7  MIT  https://github.com/radix-ui/primitives
+@radix-ui/primitive@1.2.0  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-accordion@1.2.20  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-alert-dialog@1.1.23  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-arrow@1.1.15  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-aspect-ratio@1.1.15  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-avatar@1.2.6  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-checkbox@1.3.11  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-collapsible@1.1.20  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-collection@1.1.15  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-compose-refs@1.1.5  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-context@1.2.2  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-context-menu@2.3.7  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-dialog@1.1.23  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-direction@1.1.4  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-dismissable-layer@1.1.19  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-dropdown-menu@2.1.24  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-focus-guards@1.1.6  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-focus-scope@1.1.16  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-hover-card@1.1.23  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-id@1.1.4  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-label@2.1.15  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-menu@2.1.24  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-menubar@1.1.24  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-navigation-menu@1.2.22  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-popover@1.1.23  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-popper@1.3.7  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-portal@1.1.17  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-presence@1.1.10  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-primitive@2.1.10  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-progress@1.1.16  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-radio-group@1.4.7  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-roving-focus@1.1.19  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-scroll-area@1.2.18  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-select@2.3.7  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-separator@1.1.15  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-slider@1.4.7  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-slot@1.3.3  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-switch@1.3.7  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-tabs@1.1.21  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-toggle@1.1.18  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-toggle-group@1.1.19  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-tooltip@1.2.16  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-use-callback-ref@1.1.4  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-use-controllable-state@1.2.6  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-use-controllable-state@1.3.0  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-use-effect-event@0.0.5  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-use-is-hydrated@0.1.3  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-use-layout-effect@1.1.4  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-use-previous@1.1.4  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-use-rect@1.1.4  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-use-size@1.1.4  MIT  https://github.com/radix-ui/primitives
+@radix-ui/react-visually-hidden@1.2.11  MIT  https://github.com/radix-ui/primitives
+@radix-ui/rect@1.1.3  MIT  https://github.com/radix-ui/primitives
+@react-native/asset-utils@0.88.1  MIT  https://github.com/react/react-native
+@react-native/codegen@0.88.1  MIT  https://github.com/react/react-native
+@react-native/community-cli-plugin@0.88.1  MIT  https://github.com/react/react-native
+@react-native/debugger-frontend@0.88.1  BSD-3-Clause  https://github.com/react/react-native
+@react-native/debugger-shell@0.88.1  MIT  https://github.com/react/react-native
+@react-native/dev-middleware@0.88.1  MIT  https://github.com/react/react-native
+@react-native/gradle-plugin@0.88.1  MIT  https://github.com/react/react-native
+@react-native/normalize-colors@0.88.1  MIT  https://github.com/react/react-native
+@react-native/virtualized-lists@0.88.1  MIT  https://github.com/react/react-native
+@rolldown/binding-wasm32-wasi@1.2.1  MIT  https://github.com/rolldown/rolldown
+@rolldown/pluginutils@1.0.1  MIT  https://github.com/rolldown/plugins
+@shikijs/core@4.5.0  MIT  https://github.com/shikijs/shiki
+@shikijs/engine-javascript@4.5.0  MIT  https://github.com/shikijs/shiki
+@shikijs/engine-oniguruma@4.5.0  MIT  https://github.com/shikijs/shiki
+@shikijs/langs@4.5.0  MIT  https://github.com/shikijs/shiki
+@shikijs/primitive@4.5.0  MIT  https://github.com/shikijs/shiki
+@shikijs/themes@4.5.0  MIT  https://github.com/shikijs/shiki
+@shikijs/types@4.5.0  MIT  https://github.com/shikijs/shiki
+@shikijs/vscode-textmate@10.1.0  MIT  https://github.com/shikijs/vscode-textmate
+@sinclair/typebox@0.27.12  MIT  https://github.com/sinclairzx81/sinclair-typebox
+@standard-schema/spec@1.1.0  MIT  https://github.com/standard-schema/standard-schema
+@standard-schema/utils@0.3.0  MIT  https://github.com/standard-schema/standard-schema
+@streamdown/cjk@1.0.4  Apache-2.0  https://github.com/vercel/streamdown
+@streamdown/code@2.0.0  Apache-2.0  https://github.com/vercel/streamdown
+@streamdown/math@1.0.3  Apache-2.0  https://github.com/vercel/streamdown
+@streamdown/mermaid@1.0.3  Apache-2.0  https://github.com/vercel/streamdown
+@supabase/auth-js@2.118.0  MIT  https://github.com/supabase/supabase-js
+@supabase/functions-js@2.118.0  MIT  https://github.com/supabase/supabase-js
+@supabase/phoenix@0.4.5  MIT  git://github.com/supabase/phoenix
+@supabase/postgrest-js@2.118.0  MIT  https://github.com/supabase/supabase-js
+@supabase/realtime-js@2.118.0  MIT  https://github.com/supabase/supabase-js
+@supabase/storage-js@2.118.0  MIT  https://github.com/supabase/supabase-js
+@supabase/supabase-js@2.118.0  MIT  https://github.com/supabase/supabase-js
+@superset-ui/embedded-sdk@0.4.0  Apache-2.0  https://github.com/apache/superset
+@superset-ui/switchboard@0.20.3  Apache-2.0  https://github.com/apache/superset
+@tabby_ai/hijri-converter@1.0.5  MIT
+@tailwindcss/node@4.3.3  MIT  https://github.com/tailwindlabs/tailwindcss
+@tailwindcss/oxide@4.3.3  MIT  https://github.com/tailwindlabs/tailwindcss
+@tailwindcss/vite@4.3.3  MIT  https://github.com/tailwindlabs/tailwindcss
+@tanstack/history@1.162.4  MIT  https://github.com/TanStack/router
+@tanstack/query-core@5.101.4  MIT  https://github.com/TanStack/query
+@tanstack/react-query@5.101.4  MIT  https://github.com/TanStack/query
+@tanstack/react-router@1.170.41  MIT  https://github.com/TanStack/router
+@tanstack/react-start@1.168.60  MIT  https://github.com/TanStack/router
+@tanstack/react-start-client@1.168.39  MIT  https://github.com/TanStack/router
+@tanstack/react-start-rsc@0.1.59  MIT  https://github.com/TanStack/router
+@tanstack/react-start-server@1.167.46  MIT  https://github.com/TanStack/router
+@tanstack/react-store@0.11.2  MIT  https://github.com/TanStack/store
+@tanstack/router-core@1.171.34  MIT  https://github.com/TanStack/router
+@tanstack/router-generator@1.167.40  MIT  https://github.com/TanStack/router
+@tanstack/router-plugin@1.168.42  MIT  https://github.com/TanStack/router
+@tanstack/router-utils@1.162.3  MIT  https://github.com/TanStack/router
+@tanstack/start-client-core@1.170.34  MIT  https://github.com/TanStack/router
+@tanstack/start-fn-stubs@1.162.0  MIT  https://github.com/TanStack/router
+@tanstack/start-plugin-core@1.171.49  MIT  https://github.com/TanStack/router
+@tanstack/start-server-core@1.169.39  MIT  https://github.com/TanStack/router
+@tanstack/start-storage-context@1.167.36  MIT  https://github.com/TanStack/router
+@tanstack/store@0.11.2  MIT  https://github.com/TanStack/store
+@tanstack/virtual-file-routes@1.162.0  MIT  https://github.com/TanStack/router
+@tybys/wasm-util@0.10.3  MIT  https://github.com/toyobayashi/wasm-util
+@types/d3@7.4.3  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-array@3.2.2  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-axis@3.0.6  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-brush@3.0.6  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-chord@3.0.6  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-color@3.1.3  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-contour@3.0.6  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-delaunay@6.0.4  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-dispatch@3.0.7  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-drag@3.0.7  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-dsv@3.0.7  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-ease@3.0.2  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-fetch@3.0.7  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-force@3.0.10  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-format@3.0.4  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-geo@3.1.1  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-hierarchy@3.1.7  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-interpolate@3.0.4  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-path@3.1.1  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-polygon@3.0.2  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-quadtree@3.0.6  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-random@3.0.4  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-scale@4.0.9  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-scale-chromatic@3.1.0  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-selection@3.0.12  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-shape@3.1.8  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-time@3.0.4  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-time-format@4.0.3  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-timer@3.0.2  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-transition@3.0.9  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/d3-zoom@3.0.9  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/debug@4.1.13  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/estree@1.0.9  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/estree-jsx@1.0.5  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/geojson@7946.0.16  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/hast@3.0.5  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/istanbul-lib-coverage@2.0.6  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/istanbul-lib-report@3.0.3  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/istanbul-reports@3.0.4  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/katex@0.16.8  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/mdast@4.0.4  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/ms@2.1.0  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/node@22.20.1  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/react@19.2.17  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/react-dom@19.2.3  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/trusted-types@2.0.7  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/unist@2.0.11  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/unist@3.0.3  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/yargs@17.0.35  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@types/yargs-parser@21.0.3  MIT  https://github.com/DefinitelyTyped/DefinitelyTyped
+@ungap/structured-clone@1.4.0  ISC  https://github.com/ungap/structured-clone
+@upsetjs/venn.js@2.0.0  MIT  https://github.com/upsetjs/venn.js
+@vercel/oidc@3.2.0  Apache-2.0  https://github.com/vercel/vercel
+@workflow/serde@4.1.0  Apache-2.0  https://github.com/vercel/workflow
+@xyflow/react@12.12.0  MIT  https://github.com/xyflow/xyflow
+@xyflow/system@0.0.83  MIT  https://github.com/xyflow/xyflow
+accepts@2.0.0  MIT  jshttp/accepts
+acorn@8.18.0  MIT  https://github.com/acornjs/acorn
+agent-base@7.1.4  MIT  https://github.com/TooTallNate/proxy-agents
+ai@7.0.154  Apache-2.0  https://github.com/vercel/ai
+ajv@6.15.0  MIT  https://github.com/ajv-validator/ajv
+alasql@4.22.0  MIT  http://github.com/alasql/alasql
+anser@1.4.10  MIT  git://github.com/IonicaBizau/anser
+ansi-regex@5.0.1  MIT  chalk/ansi-regex
+ansi-styles@4.3.0  MIT  chalk/ansi-styles
+ansi-styles@5.2.0  MIT  chalk/ansi-styles
+ansis@4.3.1  ISC  webdiscus/ansis
+argparse@2.0.1  Python-2.0  nodeca/argparse
+aria-hidden@1.2.6  MIT  https://github.com/theKashey/aria-hidden
+asap@2.0.6  MIT  https://github.com/kriskowal/asap
+babel-dead-code-elimination@1.0.12  MIT  pcattori/babel-dead-code-elimination
+bail@2.0.2  MIT  wooorm/bail
+base-64@0.1.0  MIT  https://github.com/mathiasbynens/base64
+base64-js@1.5.1  MIT  git://github.com/beatgammit/base64-js
+baseline-browser-mapping@2.11.4  Apache-2.0  https://github.com/web-platform-dx/baseline-browser-mapping
+browserslist@4.28.7  MIT  browserslist/browserslist
+bser@2.1.2  MIT  https://github.com/facebook/watchman
+buffer-from@1.1.2  MIT  LinusU/buffer-from
+camelcase@6.3.0  MIT  sindresorhus/camelcase
+caniuse-lite@1.0.30001806  CC-BY-4.0  browserslist/caniuse-lite
+ccount@2.0.1  MIT  wooorm/ccount
+chalk@4.1.2  MIT  chalk/chalk
+character-entities@2.0.2  MIT  wooorm/character-entities
+character-entities-html4@2.1.0  MIT  wooorm/character-entities-html4
+character-entities-legacy@3.0.0  MIT  wooorm/character-entities-legacy
+character-reference-invalid@2.0.1  MIT  wooorm/character-reference-invalid
+chokidar@5.0.0  MIT  https://github.com/paulmillr/chokidar
+ci-info@3.9.0  MIT  https://github.com/watson/ci-info
+class-variance-authority@0.7.1  Apache-2.0  https://github.com/joe-bell/cva
+classcat@5.0.5  MIT  jorgebucaran/classcat
+cliui@7.0.4  ISC  yargs/cliui
+cliui@8.0.1  ISC  yargs/cliui
+clsx@2.1.1  MIT  lukeed/clsx
+cmdk@1.1.1  MIT  https://github.com/pacocoursey/cmdk
+color-convert@2.0.1  MIT  Qix-/color-convert
+color-name@1.1.4  MIT  git@github.com:colorjs/color-name
+comma-separated-tokens@2.0.3  MIT  wooorm/comma-separated-tokens
+commander@12.1.0  MIT  https://github.com/tj/commander.js
+commander@2.20.3  MIT  https://github.com/tj/commander.js
+commander@7.2.0  MIT  https://github.com/tj/commander.js
+commander@8.3.0  MIT  https://github.com/tj/commander.js
+connect@3.7.0  MIT  senchalabs/connect
+content-type@2.1.0  MIT  jshttp/content-type
+convert-source-map@2.0.0  MIT  git://github.com/thlorenz/convert-source-map
+cookie-es@3.1.1  MIT  unjs/cookie-es
+cose-base@1.0.3  MIT  https://github.com/iVis-at-Bilkent/cose-base
+cose-base@2.2.0  MIT  https://github.com/iVis-at-Bilkent/cose-base
+cross-fetch@4.1.0  MIT  https://github.com/lquixada/cross-fetch
+cross-spawn@7.0.6  MIT  git@github.com:moxystudio/node-cross-spawn
+crossws@0.4.10  MIT  h3js/crossws
+csstype@3.2.3  MIT  https://github.com/frenic/csstype
+cytoscape@3.34.4  MIT  https://github.com/cytoscape/cytoscape.js
+cytoscape-cose-bilkent@4.1.0  MIT  https://github.com/cytoscape/cytoscape.js-cose-bilkent
+cytoscape-fcose@2.2.0  MIT  https://github.com/iVis-at-Bilkent/cytoscape.js-fcose
+d3@7.9.0  ISC  https://github.com/d3/d3
+d3-array@2.12.1  BSD-3-Clause  https://github.com/d3/d3-array
+d3-array@3.2.4  ISC  https://github.com/d3/d3-array
+d3-axis@3.0.0  ISC  https://github.com/d3/d3-axis
+d3-brush@3.0.0  ISC  https://github.com/d3/d3-brush
+d3-chord@3.0.1  ISC  https://github.com/d3/d3-chord
+d3-color@3.1.0  ISC  https://github.com/d3/d3-color
+d3-contour@4.0.2  ISC  https://github.com/d3/d3-contour
+d3-delaunay@6.0.4  ISC  https://github.com/d3/d3-delaunay
+d3-dispatch@3.0.1  ISC  https://github.com/d3/d3-dispatch
+d3-drag@3.0.0  ISC  https://github.com/d3/d3-drag
+d3-dsv@3.0.1  ISC  https://github.com/d3/d3-dsv
+d3-ease@3.0.1  BSD-3-Clause  https://github.com/d3/d3-ease
+d3-fetch@3.0.1  ISC  https://github.com/d3/d3-fetch
+d3-force@3.0.0  ISC  https://github.com/d3/d3-force
+d3-format@3.1.2  ISC  https://github.com/d3/d3-format
+d3-geo@3.1.1  ISC  https://github.com/d3/d3-geo
+d3-hierarchy@3.1.2  ISC  https://github.com/d3/d3-hierarchy
+d3-interpolate@3.0.1  ISC  https://github.com/d3/d3-interpolate
+d3-path@1.0.9  BSD-3-Clause  https://github.com/d3/d3-path
+d3-path@3.1.0  ISC  https://github.com/d3/d3-path
+d3-polygon@3.0.1  ISC  https://github.com/d3/d3-polygon
+d3-quadtree@3.0.1  ISC  https://github.com/d3/d3-quadtree
+d3-random@3.0.1  ISC  https://github.com/d3/d3-random
+d3-sankey@0.12.3  BSD-3-Clause  https://github.com/d3/d3-sankey
+d3-scale@4.0.2  ISC  https://github.com/d3/d3-scale
+d3-scale-chromatic@3.1.0  ISC  https://github.com/d3/d3-scale-chromatic
+d3-selection@3.0.0  ISC  https://github.com/d3/d3-selection
+d3-shape@1.3.7  BSD-3-Clause  https://github.com/d3/d3-shape
+d3-shape@3.2.0  ISC  https://github.com/d3/d3-shape
+d3-time@3.1.0  ISC  https://github.com/d3/d3-time
+d3-time-format@4.1.0  ISC  https://github.com/d3/d3-time-format
+d3-timer@3.0.1  ISC  https://github.com/d3/d3-timer
+d3-transition@3.0.1  ISC  https://github.com/d3/d3-transition
+d3-zoom@3.0.0  ISC  https://github.com/d3/d3-zoom
+dagre-d3-es@7.0.14  MIT  https://github.com/tbo47/dagre-es
+date-fns@4.4.0  MIT  https://github.com/date-fns/date-fns
+date-fns-jalali@4.1.0-0  MIT  https://github.com/date-fns-jalali/date-fns-jalali
+dayjs@1.11.23  MIT  https://github.com/iamkun/dayjs
+debug@2.6.9  MIT  git://github.com/visionmedia/debug
+debug@4.4.3  MIT  git://github.com/debug-js/debug
+decimal.js-light@2.5.1  MIT  https://github.com/MikeMcl/decimal.js-light
+decode-named-character-reference@1.3.0  MIT  wooorm/decode-named-character-reference
+define-lazy-prop@2.0.0  MIT  sindresorhus/define-lazy-prop
+delaunator@5.1.0  ISC  https://github.com/mapbox/delaunator
+depd@2.0.0  MIT  dougwilson/nodejs-depd
+dequal@2.0.3  MIT  lukeed/dequal
+destroy@1.2.0  MIT  stream-utils/destroy
+detect-libc@2.1.2  Apache-2.0  git://github.com/lovell/detect-libc
+detect-node-es@1.1.0  MIT  https://github.com/thekashey/detect-node
+devlop@1.1.0  MIT  wooorm/devlop
+diff@8.0.4  BSD-3-Clause  https://github.com/kpdecker/jsdiff
+dom-helpers@5.2.1  MIT  https://github.com/react-bootstrap/dom-helpers
+dompurify@3.4.17  (MPL-2.0 OR Apache-2.0)  git://github.com/cure53/DOMPurify
+ee-first@1.1.1  MIT  jonathanong/ee-first
+electron-to-chromium@1.5.398  ISC  https://github.com/Kilian/electron-to-chromium
+embla-carousel@8.6.0  MIT  https://github.com/davidjerleke/embla-carousel
+embla-carousel-react@8.6.0  MIT  https://github.com/davidjerleke/embla-carousel
+embla-carousel-reactive-utils@8.6.0  MIT  https://github.com/davidjerleke/embla-carousel
+emoji-regex@8.0.0  MIT  https://github.com/mathiasbynens/emoji-regex
+encodeurl@1.0.2  MIT  pillarjs/encodeurl
+encodeurl@2.0.1  MIT  pillarjs/encodeurl
+enhanced-resolve@5.24.4  MIT  https://github.com/webpack/enhanced-resolve
+entities@6.0.1  BSD-2-Clause  git://github.com/fb55/entities
+error-stack-parser@2.1.4  MIT  git://github.com/stacktracejs/error-stack-parser
+es-toolkit@1.53.1  MIT  https://github.com/toss/es-toolkit
+escalade@3.2.0  MIT  lukeed/escalade
+escape-html@1.0.3  MIT  component/escape-html
+escape-string-regexp@5.0.0  MIT  sindresorhus/escape-string-regexp
+estree-util-is-identifier-name@3.0.0  MIT  syntax-tree/estree-util-is-identifier-name
+etag@1.8.1  MIT  jshttp/etag
+eventemitter3@4.0.7  MIT  git://github.com/primus/eventemitter3
+eventsource-parser@3.1.1  MIT  ssh://git@github.com/rexxars/eventsource-parser
+exponential-backoff@3.1.3  Apache-2.0  https://github.com/coveooss/exponential-backoff
+exsolve@1.1.1  MIT  unjs/exsolve
+extend@3.0.2  MIT  https://github.com/justmoon/node-extend
+fast-deep-equal@3.1.3  MIT  https://github.com/epoberezkin/fast-deep-equal
+fast-equals@5.4.1  MIT  https://github.com/planttheidea/fast-equals
+fast-json-stable-stringify@2.1.0  MIT  git://github.com/epoberezkin/fast-json-stable-stringify
+fastdom@1.0.12  MIT  git://github.com/wilsonpage/fastdom
+fb-dotslash@0.5.8  (MIT OR Apache-2.0)  https://github.com/facebook/dotslash
+fb-watchman@2.0.4  MIT  git@github.com:facebook/watchman
+fdir@6.5.0  MIT  https://github.com/thecodrr/fdir
+fetchdts@0.1.7  MIT  unjs/fetchdts
+finalhandler@1.1.2  MIT  pillarjs/finalhandler
+flow-enums-runtime@0.0.6  MIT  https://github.com/facebook/flow
+flow-estree@0.327.0  MIT  https://github.com/facebook/flow
+flow-estree@0.336.0  MIT  https://github.com/facebook/flow
+flow-parser@0.327.0  MIT  https://github.com/facebook/flow
+flow-parser@0.336.0  MIT  https://github.com/facebook/flow
+framer-motion@14.9.0  MIT  https://github.com/motiondivision/motion/
+fresh@0.5.2  MIT  jshttp/fresh
+fzstd@0.1.1  MIT  https://github.com/101arrowz/fzstd
+gensync@1.0.0-beta.2  MIT  https://github.com/loganfsmyth/gensync
+get-caller-file@2.0.5  ISC  https://github.com/stefanpenner/get-caller-file
+get-east-asian-width@1.7.0  MIT  sindresorhus/get-east-asian-width
+get-nonce@1.0.1  MIT  git@github.com:theKashey/get-nonce
+globrex@0.1.2  MIT  https://github.com/terkelg/globrex
+graceful-fs@4.2.11  ISC  https://github.com/isaacs/node-graceful-fs
+h3@2.0.1-rc.20  MIT  h3js/h3
+hachure-fill@0.5.2  MIT  https://github.com/pshihn/hachure-fill
+has-flag@4.0.0  MIT  sindresorhus/has-flag
+hast-util-from-dom@5.0.1  ISC  syntax-tree/hast-util-from-dom
+hast-util-from-html@2.0.3  MIT  syntax-tree/hast-util-from-html
+hast-util-from-html-isomorphic@2.0.0  MIT  syntax-tree/hast-util-from-html-isomorphic
+hast-util-from-parse5@8.0.4  MIT  syntax-tree/hast-util-from-parse5
+hast-util-parse-selector@4.0.0  MIT  syntax-tree/hast-util-parse-selector
+hast-util-raw@9.1.0  MIT  syntax-tree/hast-util-raw
+hast-util-sanitize@5.0.2  MIT  syntax-tree/hast-util-sanitize
+hast-util-to-html@9.0.6  MIT  syntax-tree/hast-util-to-html
+hast-util-to-jsx-runtime@2.3.7  MIT  syntax-tree/hast-util-to-jsx-runtime
+hast-util-to-parse5@8.0.1  MIT  syntax-tree/hast-util-to-parse5
+hast-util-to-text@4.0.3  MIT  syntax-tree/hast-util-to-text
+hast-util-whitespace@3.0.0  MIT  syntax-tree/hast-util-whitespace
+hastscript@9.0.3  MIT  syntax-tree/hastscript
+hermes-compiler@260318099.0.5  MIT  ssh://git@github.com/facebook/hermes
+html-url-attributes@3.0.1  MIT  https://github.com/rehypejs/rehype-minify/tree/main/packages/html-url-attributes
+html-void-elements@3.0.0  MIT  wooorm/html-void-elements
+http-errors@2.0.1  MIT  jshttp/http-errors
+https-proxy-agent@7.0.6  MIT  https://github.com/TooTallNate/proxy-agents
+hyparquet@1.32.0  MIT  https://github.com/hyparam/hyparquet
+hyparquet-compressors@1.1.2  MIT  https://github.com/hyparam/hyparquet-compressors
+hyparquet-writer@0.18.0  MIT  https://github.com/hyparam/hyparquet-writer
+hysnappy@1.1.1  MIT  https://github.com/hyparam/hysnappy
+iceberg-js@0.8.1  MIT  https://github.com/supabase/iceberg-js
+iconv-lite@0.6.3  MIT  git://github.com/ashtuchkin/iconv-lite
+import-meta-resolve@4.2.0  MIT  wooorm/import-meta-resolve
+inherits@2.0.4  ISC  git://github.com/isaacs/inherits
+inline-style-parser@0.2.9  MIT  https://github.com/remarkablemark/inline-style-parser
+input-otp@1.4.2  MIT  https://github.com/guilhermerodz/input-otp
+internmap@1.0.1  ISC  https://github.com/mbostock/internmap
+internmap@2.0.3  ISC  https://github.com/mbostock/internmap
+invariant@2.2.4  MIT  https://github.com/zertosh/invariant
+is-alphabetical@2.0.1  MIT  wooorm/is-alphabetical
+is-alphanumerical@2.0.1  MIT  wooorm/is-alphanumerical
+is-decimal@2.0.1  MIT  wooorm/is-decimal
+is-docker@2.2.1  MIT  sindresorhus/is-docker
+is-fullwidth-code-point@3.0.0  MIT  sindresorhus/is-fullwidth-code-point
+is-hexadecimal@2.0.1  MIT  wooorm/is-hexadecimal
+is-plain-obj@4.1.0  MIT  sindresorhus/is-plain-obj
+is-wsl@2.2.0  MIT  sindresorhus/is-wsl
+isbot@5.2.1  Unlicense  https://github.com/omrilotan/isbot
+isexe@2.0.0  ISC  https://github.com/isaacs/isexe
+jest-get-type@29.6.3  MIT  https://github.com/jestjs/jest
+jest-util@29.7.0  MIT  https://github.com/jestjs/jest
+jest-validate@29.7.0  MIT  https://github.com/jestjs/jest
+jest-worker@29.7.0  MIT  https://github.com/jestjs/jest
+jiti@2.7.0  MIT  unjs/jiti
+js-tokens@4.0.0  MIT  lydell/js-tokens
+js-yaml@4.3.2  MIT  nodeca/js-yaml
+jsc-safe-url@0.2.4  0BSD  https://github.com/robhogan/jsc-safe-url
+jsesc@3.1.0  MIT  https://github.com/mathiasbynens/jsesc
+json-schema@0.4.0  (AFL-2.1 OR BSD-3-Clause)  http://github.com/kriszyp/json-schema
+json-schema-traverse@0.4.1  MIT  https://github.com/epoberezkin/json-schema-traverse
+json5@2.2.3  MIT  https://github.com/json5/json5
+jwt-decode@4.0.0  MIT  git://github.com/auth0/jwt-decode
+katex@0.16.47  MIT  https://github.com/KaTeX/KaTeX
+khroma@2.1.0  MIT  github:fabiospampinato/khroma
+layout-base@1.0.2  MIT  https://github.com/iVis-at-Bilkent/layout-base
+layout-base@2.0.1  MIT  https://github.com/iVis-at-Bilkent/layout-base
+leven@3.1.0  MIT  sindresorhus/leven
+lightningcss@1.32.0  MPL-2.0  https://github.com/parcel-bundler/lightningcss
+lightningcss@1.33.0  MPL-2.0  https://github.com/parcel-bundler/lightningcss
+lodash@4.18.1  MIT  lodash/lodash
+lodash-es@4.18.1  MIT  lodash/lodash
+lodash.throttle@4.1.1  MIT  lodash/lodash
+longest-streak@3.1.0  MIT  wooorm/longest-streak
+loose-envify@1.4.0  MIT  git://github.com/zertosh/loose-envify
+lru-cache@5.1.1  ISC  git://github.com/isaacs/node-lru-cache
+lucide-react@0.575.0  ISC  https://github.com/lucide-icons/lucide
+magic-string@0.30.21  MIT  https://github.com/Rich-Harris/magic-string
+markdown-table@3.0.4  MIT  wooorm/markdown-table
+marked@16.4.2  MIT  git://github.com/markedjs/marked
+marked@18.1.2  MIT  https://github.com/markedjs/marked
+mdast-util-find-and-replace@3.0.4  MIT  syntax-tree/mdast-util-find-and-replace
+mdast-util-from-markdown@2.1.0  MIT  syntax-tree/mdast-util-from-markdown
+mdast-util-gfm@3.1.0  MIT  syntax-tree/mdast-util-gfm
+mdast-util-gfm-autolink-literal@2.0.1  MIT  syntax-tree/mdast-util-gfm-autolink-literal
+mdast-util-gfm-footnote@2.1.0  MIT  syntax-tree/mdast-util-gfm-footnote
+mdast-util-gfm-strikethrough@2.0.1  MIT  syntax-tree/mdast-util-gfm-strikethrough
+mdast-util-gfm-table@2.0.0  MIT  syntax-tree/mdast-util-gfm-table
+mdast-util-gfm-task-list-item@2.0.0  MIT  syntax-tree/mdast-util-gfm-task-list-item
+mdast-util-math@3.0.0  MIT  syntax-tree/mdast-util-math
+mdast-util-mdx-expression@2.0.1  MIT  syntax-tree/mdast-util-mdx-expression
+mdast-util-mdx-jsx@3.2.0  MIT  syntax-tree/mdast-util-mdx-jsx
+mdast-util-mdxjs-esm@2.0.1  MIT  syntax-tree/mdast-util-mdxjs-esm
+mdast-util-phrasing@4.1.0  MIT  syntax-tree/mdast-util-phrasing
+mdast-util-to-hast@13.2.1  MIT  syntax-tree/mdast-util-to-hast
+mdast-util-to-markdown@2.2.1  MIT  syntax-tree/mdast-util-to-markdown
+mdast-util-to-markdown-cjk-friendly@1.0.1  MIT  https://github.com/tats-u/markdown-cjk-friendly
+mdast-util-to-markdown-cjk-friendly-gfm-strikethrough@1.0.1  MIT  https://github.com/tats-u/markdown-cjk-friendly
+mdast-util-to-string@4.0.0  MIT  syntax-tree/mdast-util-to-string
+memoize-one@5.2.1  MIT  https://github.com/alexreardon/memoize-one
+merge-stream@2.0.0  MIT  grncdr/merge-stream
+mermaid@11.17.2  MIT  https://github.com/mermaid-js/mermaid
+metro@0.87.2  MIT  https://github.com/react/metro
+metro-babel-transformer@0.87.2  MIT  https://github.com/react/metro
+metro-cache@0.87.2  MIT  https://github.com/react/metro
+metro-cache-key@0.87.2  MIT  https://github.com/react/metro
+metro-config@0.87.2  MIT  https://github.com/react/metro
+metro-core@0.87.2  MIT  https://github.com/react/metro
+metro-file-map@0.87.2  MIT  https://github.com/react/metro
+metro-minify-terser@0.87.2  MIT  https://github.com/react/metro
+metro-resolver@0.87.2  MIT  https://github.com/react/metro
+metro-runtime@0.87.2  MIT  https://github.com/react/metro
+metro-source-map@0.87.2  MIT  https://github.com/react/metro
+metro-symbolicate@0.87.2  MIT  https://github.com/react/metro
+metro-transform-plugins@0.87.2  MIT  https://github.com/react/metro
+metro-transform-worker@0.87.2  MIT  https://github.com/react/metro
+micromark@4.0.3  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark
+micromark-core-commonmark@2.0.4  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-core-commonmark
+micromark-extension-cjk-friendly@2.0.2  MIT  https://github.com/tats-u/markdown-cjk-friendly
+micromark-extension-cjk-friendly-gfm-strikethrough@2.0.1  MIT  https://github.com/tats-u/markdown-cjk-friendly
+micromark-extension-cjk-friendly-util@3.0.1  MIT  https://github.com/tats-u/markdown-cjk-friendly
+micromark-extension-gfm@3.0.0  MIT  micromark/micromark-extension-gfm
+micromark-extension-gfm-autolink-literal@2.1.0  MIT  micromark/micromark-extension-gfm-autolink-literal
+micromark-extension-gfm-footnote@2.1.0  MIT  micromark/micromark-extension-gfm-footnote
+micromark-extension-gfm-strikethrough@2.1.0  MIT  micromark/micromark-extension-gfm-strikethrough
+micromark-extension-gfm-table@2.1.2  MIT  micromark/micromark-extension-gfm-table
+micromark-extension-gfm-tagfilter@2.0.0  MIT  micromark/micromark-extension-gfm-tagfilter
+micromark-extension-gfm-task-list-item@2.1.0  MIT  micromark/micromark-extension-gfm-task-list-item
+micromark-extension-math@3.1.0  MIT  micromark/micromark-extension-math
+micromark-factory-destination@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-factory-destination
+micromark-factory-label@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-factory-label
+micromark-factory-space@2.1.0  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-factory-space
+micromark-factory-title@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-factory-title
+micromark-factory-whitespace@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-factory-whitespace
+micromark-util-character@2.1.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-character
+micromark-util-chunked@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-chunked
+micromark-util-classify-character@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-classify-character
+micromark-util-combine-extensions@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-combine-extensions
+micromark-util-decode-numeric-character-reference@2.0.2  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-decode-numeric-character-reference
+micromark-util-decode-string@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-decode-string
+micromark-util-edit-map@1.0.0  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-edit-map
+micromark-util-encode@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-encode
+micromark-util-html-tag-name@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-html-tag-name
+micromark-util-normalize-identifier@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-normalize-identifier
+micromark-util-resolve-all@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-resolve-all
+micromark-util-sanitize-uri@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-sanitize-uri
+micromark-util-subtokenize@2.1.0  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-subtokenize
+micromark-util-symbol@2.0.1  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-symbol
+micromark-util-types@2.0.3  MIT  https://github.com/micromark/micromark/tree/main/packages/micromark-util-types
+mime@1.6.0  MIT  https://github.com/broofa/node-mime
+mime-db@1.54.0  MIT  jshttp/mime-db
+mime-types@3.0.2  MIT  jshttp/mime-types
+motion@14.9.0  MIT  https://github.com/motiondivision/motion
+motion-dom@14.9.0  MIT  https://github.com/motiondivision/motion
+motion-utils@14.7.0  MIT  https://github.com/motiondivision/motion
+ms@2.0.0  MIT  zeit/ms
+ms@2.1.3  MIT  vercel/ms
+nanoid@3.3.18  MIT  ai/nanoid
+nanoid@6.0.2  MIT  ai/nanoid
+negotiator@1.1.0  MIT  jshttp/negotiator
+node-fetch@2.7.0  MIT  https://github.com/bitinn/node-fetch
+node-int64@0.4.0  MIT  https://github.com/broofa/node-int64
+node-releases@2.0.51  MIT  https://github.com/chicoxyzzy/node-releases
+nodemailer@10.3.1  MIT-0  https://github.com/nodemailer/nodemailer
+nullthrows@1.1.1  MIT  https://github.com/zertosh/nullthrows
+ob1@0.87.2  MIT  https://github.com/react/metro
+object-assign@4.1.1  MIT  sindresorhus/object-assign
+on-finished@2.3.0  MIT  jshttp/on-finished
+on-finished@2.4.2  MIT  jshttp/on-finished
+oniguruma-parser@0.12.2  MIT  https://github.com/slevithan/oniguruma-parser
+oniguruma-to-es@4.3.6  MIT  https://github.com/slevithan/oniguruma-to-es
+open@8.4.2  MIT  sindresorhus/open
+package-manager-detector@1.9.0  MIT  https://github.com/antfu-collective/package-manager-detector
+papaparse@5.7.0  MIT  https://github.com/mholt/PapaParse
+parse-entities@4.0.2  MIT  wooorm/parse-entities
+parse5@7.3.0  MIT  git://github.com/inikulin/parse5
+parseurl@1.3.3  MIT  pillarjs/parseurl
+path-data-parser@0.1.0  MIT  https://github.com/pshihn/path-data-parser
+path-key@3.1.1  MIT  sindresorhus/path-key
+pathe@2.0.3  MIT  unjs/pathe
+picocolors@1.1.1  ISC  alexeyraspopov/picocolors
+picomatch@2.3.2  MIT  micromatch/picomatch
+picomatch@4.0.5  MIT  micromatch/picomatch
+picomatch@4.0.7  MIT  micromatch/picomatch
+pkce-challenge@5.0.1  MIT  https://github.com/crouchcd/pkce-challenge
+points-on-curve@0.2.0  MIT  https://github.com/pshihn/bezier-points
+points-on-path@0.2.1  MIT  https://github.com/pshihn/points-on-path
+postcss@8.5.24  MIT  postcss/postcss
+prettier@3.9.6  MIT  prettier/prettier
+pretty-format@29.7.0  MIT  https://github.com/jestjs/jest
+promise@8.3.0  MIT  https://github.com/then/promise
+prop-types@15.8.1  MIT  facebook/prop-types
+property-information@7.2.0  MIT  wooorm/property-information
+punycode@2.3.1  MIT  https://github.com/mathiasbynens/punycode.js
+range-parser@1.2.1  MIT  jshttp/range-parser
+react@19.2.8  MIT  https://github.com/react/react
+react-day-picker@9.14.0  MIT  https://github.com/gpbl/react-day-picker
+react-devtools-core@6.1.5  MIT  https://github.com/facebook/react
+react-dom@19.2.8  MIT  https://github.com/react/react
+react-hook-form@7.83.0  MIT  https://github.com/react-hook-form/react-hook-form
+react-is@16.13.1  MIT  https://github.com/facebook/react
+react-is@18.3.1  MIT  https://github.com/facebook/react
+react-native@0.88.1  MIT  https://github.com/react/react-native
+react-native-fs@2.20.0  MIT  git@github.com:itinance/react-native-fs
+react-refresh@0.14.2  MIT  https://github.com/facebook/react
+react-remove-scroll@2.7.2  MIT  https://github.com/theKashey/react-remove-scroll
+react-remove-scroll-bar@2.3.8  MIT  https://github.com/theKashey/react-remove-scroll-bar
+react-resizable-panels@4.12.2  MIT  https://github.com/bvaughn/react-resizable-panels
+react-smooth@4.0.4  MIT  https://github.com/recharts/react-smooth
+react-style-singleton@2.2.3  MIT  https://github.com/theKashey/react-style-singleton
+react-transition-group@4.4.5  BSD-3-Clause  https://github.com/reactjs/react-transition-group
+readdirp@5.0.0  MIT  https://github.com/paulmillr/readdirp
+recharts@2.15.4  MIT  https://github.com/recharts/recharts
+recharts-scale@0.4.5  MIT  https://github.com/recharts/recharts-scale
+regenerator-runtime@0.13.11  MIT  https://github.com/facebook/regenerator/tree/main/packages/runtime
+regex@6.1.0  MIT  https://github.com/slevithan/regex
+regex-recursion@6.0.2  MIT  https://github.com/slevithan/regex-recursion
+regex-utilities@2.3.0  MIT  https://github.com/slevithan/regex-utilities
+rehype-harden@1.1.8  MIT  https://github.com/vercel-labs/markdown-sanitizers
+rehype-katex@7.0.1  MIT  https://github.com/remarkjs/remark-math/tree/main/packages/rehype-katex
+rehype-raw@7.0.0  MIT  rehypejs/rehype-raw
+rehype-sanitize@6.0.0  MIT  rehypejs/rehype-sanitize
+remark-cjk-friendly@2.3.3  MIT  https://github.com/tats-u/markdown-cjk-friendly
+remark-cjk-friendly-gfm-strikethrough@2.3.2  MIT  https://github.com/tats-u/markdown-cjk-friendly
+remark-gfm@4.0.1  MIT  remarkjs/remark-gfm
+remark-math@6.0.0  MIT  https://github.com/remarkjs/remark-math/tree/main/packages/remark-math
+remark-parse@11.0.0  MIT  https://github.com/remarkjs/remark/tree/main/packages/remark-parse
+remark-rehype@11.1.2  MIT  remarkjs/remark-rehype
+remark-stringify@11.0.0  MIT  https://github.com/remarkjs/remark/tree/main/packages/remark-stringify
+remend@1.4.0  Apache-2.0  https://github.com/vercel/streamdown
+require-directory@2.1.1  MIT  git://github.com/troygoode/node-require-directory
+robust-predicates@3.0.3  Unlicense  https://github.com/mourner/robust-predicates
+rolldown@1.2.1  MIT  https://github.com/rolldown/rolldown
+rou3@0.8.1  MIT  h3js/rou3
+roughjs@4.6.6  MIT  https://github.com/pshihn/rough
+rw@1.3.3  BSD-3-Clause  http://github.com/mbostock/rw
+safer-buffer@2.1.2  MIT  https://github.com/ChALkeR/safer-buffer
+scheduler@0.27.0  MIT  https://github.com/facebook/react
+scheduler@0.28.0  MIT  https://github.com/react/react
+semver@6.3.1  ISC  https://github.com/npm/node-semver
+semver@7.8.5  ISC  https://github.com/npm/node-semver
+send@0.19.2  MIT  pillarjs/send
+serialize-error@2.1.0  MIT  sindresorhus/serialize-error
+seroval@1.6.11  MIT  https://github.com/lxsmnsyc/seroval
+seroval-plugins@1.6.8  MIT  https://github.com/lxsmnsyc/seroval
+serve-static@1.16.3  MIT  expressjs/serve-static
+setprototypeof@1.2.0  ISC  https://github.com/wesleytodd/setprototypeof
+shebang-command@2.0.0  MIT  kevva/shebang-command
+shebang-regex@3.0.0  MIT  sindresorhus/shebang-regex
+shell-quote@1.11.0  MIT  http://github.com/ljharb/shell-quote
+shiki@4.5.0  MIT  https://github.com/shikijs/shiki
+sonner@2.0.7  MIT  https://github.com/emilkowalski/sonner
+source-map@0.5.7  BSD-3-Clause  http://github.com/mozilla/source-map
+source-map@0.6.1  BSD-3-Clause  http://github.com/mozilla/source-map
+source-map@0.7.6  BSD-3-Clause  http://github.com/mozilla/source-map
+source-map-js@1.2.2  BSD-3-Clause  7rulnik/source-map-js
+source-map-support@0.5.21  MIT  https://github.com/evanw/node-source-map-support
+space-separated-tokens@2.0.2  MIT  wooorm/space-separated-tokens
+srvx@0.11.22  MIT  h3js/srvx
+stackframe@1.3.4  MIT  git://github.com/stacktracejs/stackframe
+stacktrace-parser@0.1.11  MIT  https://github.com/errwischt/stacktrace-parser
+statuses@1.5.0  MIT  jshttp/statuses
+statuses@2.0.2  MIT  jshttp/statuses
+streamdown@2.7.1  Apache-2.0  https://github.com/vercel/streamdown
+strictdom@1.0.1  MIT  git://github.com/wilsonpage/strictdom
+string-width@4.2.3  MIT  sindresorhus/string-width
+stringify-entities@4.0.4  MIT  wooorm/stringify-entities
+strip-ansi@6.0.1  MIT  chalk/strip-ansi
+style-to-object@2.0.2  MIT  https://github.com/remarkablemark/style-to-object
+stylis@4.4.0  MIT  https://github.com/thysultan/stylis.js
+supports-color@7.2.0  MIT  chalk/supports-color
+supports-color@8.1.1  MIT  chalk/supports-color
+swr@2.5.1  MIT  github:vercel/swr
+tailwind-merge@3.6.0  MIT  https://github.com/dcastil/tailwind-merge
+tailwindcss@4.3.3  MIT  https://github.com/tailwindlabs/tailwindcss
+tapable@2.3.3  MIT  http://github.com/webpack/tapable
+terser@5.51.2  BSD-2-Clause  https://github.com/terser/terser
+throat@5.0.0  MIT  https://github.com/ForbesLindesay/throat
+throttleit@2.1.0  MIT  sindresorhus/throttleit
+tiny-invariant@1.3.3  MIT  https://github.com/alexreardon/tiny-invariant
+tinyexec@1.3.1  MIT  https://github.com/tinylibs/tinyexec
+tinyglobby@0.2.17  MIT  https://github.com/SuperchupuDev/tinyglobby
+toidentifier@1.0.1  MIT  component/toidentifier
+tr46@0.0.3  MIT  https://github.com/Sebmaster/tr46.js
+trim-lines@3.0.1  MIT  wooorm/trim-lines
+trough@2.2.0  MIT  wooorm/trough
+ts-dedent@2.3.0  MIT  https://github.com/tamino-martinius/node-ts-dedent
+tsconfck@3.1.6  MIT  https://github.com/dominikg/tsconfck
+tslib@2.8.1  0BSD  https://github.com/Microsoft/tslib
+tw-animate-css@1.4.0  MIT  Wombosvideo/tw-animate-css
+type-fest@0.7.1  (MIT OR CC0-1.0)  sindresorhus/type-fest
+typescript@5.9.3  Apache-2.0  https://github.com/microsoft/TypeScript
+ufo@1.6.4  MIT  unjs/ufo
+undici@7.30.1  MIT  https://github.com/nodejs/undici
+undici@8.12.3  MIT  https://github.com/nodejs/undici
+undici-types@6.21.0  MIT  https://github.com/nodejs/undici
+unified@11.0.5  MIT  unifiedjs/unified
+unist-util-is@6.0.1  MIT  syntax-tree/unist-util-is
+unist-util-position@5.0.0  MIT  syntax-tree/unist-util-position
+unist-util-remove-position@5.0.0  MIT  syntax-tree/unist-util-remove-position
+unist-util-stringify-position@4.0.0  MIT  syntax-tree/unist-util-stringify-position
+unist-util-visit@5.2.0  MIT  syntax-tree/unist-util-visit
+unist-util-visit-parents@6.1.0  MIT  syntax-tree/unist-util-visit-parents
+unpipe@1.0.0  MIT  stream-utils/unpipe
+unplugin@3.3.0  MIT  https://github.com/unjs/unplugin
+update-browserslist-db@1.2.3  MIT  browserslist/update-db
+uri-js@4.4.1  BSD-2-Clause  http://github.com/garycourt/uri-js
+use-callback-ref@1.3.3  MIT  https://github.com/theKashey/use-callback-ref/
+use-sidecar@1.1.3  MIT  https://github.com/theKashey/use-sidecar
+use-stick-to-bottom@1.1.6  MIT  https://github.com/samdenty/use-stick-to-bottom
+use-sync-external-store@1.6.0  MIT  https://github.com/facebook/react
+utf8@3.0.0  MIT  https://github.com/mathiasbynens/utf8.js
+utils-merge@1.0.1  MIT  git://github.com/jaredhanson/utils-merge
+uuid@14.0.3  MIT  https://github.com/uuidjs/uuid
+vaul@1.1.2  MIT  https://github.com/emilkowalski/vaul
+vfile@6.0.3  MIT  vfile/vfile
+vfile-location@5.0.3  MIT  vfile/vfile-location
+vfile-message@4.0.3  MIT  vfile/vfile-message
+victory-vendor@36.9.2  MIT AND ISC  https://github.com/FormidableLabs/victory
+vite@8.1.6  MIT  https://github.com/vitejs/vite
+vite-tsconfig-paths@6.1.1  MIT  aleclarson/vite-tsconfig-paths
+vitefu@1.1.3  MIT  https://github.com/svitejs/vitefu
+vlq@1.0.1  MIT  https://github.com/Rich-Harris/vlq
+web-namespaces@2.0.1  MIT  wooorm/web-namespaces
+webidl-conversions@3.0.1  BSD-2-Clause  jsdom/webidl-conversions
+webpack-virtual-modules@0.6.2  MIT  https://github.com/sysgears/webpack-virtual-modules
+whatwg-fetch@3.6.20  MIT  github/fetch
+whatwg-url@5.0.0  MIT  jsdom/whatwg-url
+which@2.0.2  ISC  git://github.com/isaacs/node-which
+wrap-ansi@7.0.0  MIT  chalk/wrap-ansi
+ws@7.5.13  MIT  websockets/ws
+xmlbuilder2@4.0.3  MIT  https://github.com/oozcitak/xmlbuilder2
+y18n@5.0.8  ISC  yargs/y18n
+yallist@3.1.1  ISC  https://github.com/isaacs/yallist
+yargs@16.2.2  MIT  https://github.com/yargs/yargs
+yargs@17.7.3  MIT  https://github.com/yargs/yargs
+yargs-parser@20.2.9  ISC  https://github.com/yargs/yargs-parser
+yargs-parser@21.1.1  ISC  https://github.com/yargs/yargs-parser
+zod@4.6.6  MIT  https://github.com/colinhacks/zod
+zod@4.6.7  MIT  https://github.com/colinhacks/zod
+zustand@4.5.7  MIT  https://github.com/pmndrs/zustand
+zwitch@2.0.4  MIT  wooorm/zwitch
+
+2. Python packages of Connect workers and optional DataFusion acceptance reader
+
+cffi@2.1.1  MIT-0
+confluent-kafka@2.6.1  Apache Software License
+cryptography@50.0.2  Apache-2.0 OR BSD-3-Clause
+datafusion@50.1.0  Apache Software License
+fastavro@1.10.0  MIT License
+psycopg@3.2.10  GNU Lesser General Public License v3 (LGPLv3)
+psycopg-binary@3.2.10  GNU Lesser General Public License v3 (LGPLv3)
+pyarrow@26.0.0  Apache-2.0
+pycparser@3.12  BSD-3-Clause
+pymysql@1.1.1  MIT License
+tzdata@2026.6  Apache-2.0
+
+3. Vendored source
+
+shadcn/ui component sources (src/components/ui)  MIT  https://github.com/shadcn-ui/ui
+  Copied into this repository and modified; Copyright (c) 2023 shadcn.
+
+4. Software pulled or built by the deploy/ assets (not distributed with Meridian)
+
+python:3.12-slim / python:3.13-slim images  PSF-2.0 and Debian package licences
+  deploy/*/Dockerfile base images
+Karapace schema registry  Apache-2.0
+  deploy/connect/certify.compose.yml (test registry only)
+Supabase CLI and separately pulled backend services  Component-specific licences; see https://github.com/supabase/supabase
+  scripts/self-host.mjs; backend images are not bundled in the source archive
+PostgreSQL images  PostgreSQL License
+  deploy/connect and deploy/ingest test sources
+MySQL 8.4 image  GPL-2.0 with the Universal FOSS Exception
+  deploy/ingest/test-sources.compose.yml (test source only)
+Apache Kafka image  Apache-2.0
+  deploy/ingest/test-sources.compose.yml (test source only)
+
+5. Licence notes
+
+- psycopg and psycopg-binary (LGPL-3.0): used unmodified as a dynamically loaded library by the separately distributed connect worker. Source: https://github.com/psycopg/psycopg. You may replace the library with a modified version under the LGPL's terms.
+- caniuse-lite (CC-BY-4.0): browser-support data used at build time; data by Alexis Deveria and caniuse.com contributors, https://caniuse.com.
+- lightningcss (MPL-2.0): build-time CSS compiler, used unmodified and not included in the built application. Source: https://github.com/parcel-bundler/lightningcss.
+- dompurify is dual-licensed (MPL-2.0 OR Apache-2.0); Meridian uses it under Apache-2.0.
+
+6. NOTICE files of dependencies
+
+--- es-toolkit@1.53.1 ---
+es-toolkit
+
+Parts of the test suite and compatibility layer in es-toolkit/compat are
+derived from Lodash (https://github.com/lodash/lodash).
+
+Lodash copyright notice and MIT permission notice:
+
+Copyright OpenJS Foundation and other contributors <https://openjsf.org/>
+
+Based on Underscore.js, copyright Jeremy Ashkenas,
+DocumentCloud and Investigative Reporters & Editors <http://underscorejs.org/>
+
+This software consists of voluntary contributions made by many
+individuals. For exact contribution history, see the revision history
+available at https://github.com/lodash/lodash
+
+The following license applies to all parts of this software except as
+documented below:
+
+====
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

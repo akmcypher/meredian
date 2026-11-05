@@ -1,0 +1,8 @@
+{
+  "protocol": "meridian-connect/1",
+  "images": {
+    "postgres-v1": {"digest": null, "status": "unbuilt-unverified"},
+    "bronze-v1": {"digest": null, "status": "unbuilt-unverified"}
+  },
+  "required_release_checks": ["immutable sha256 digest", "cosign verification", "SBOM", "vulnerability scan", "contract/recovery certification"]
+}

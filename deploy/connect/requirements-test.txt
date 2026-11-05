@@ -1,0 +1,4 @@
+-r requirements.txt
+# Optional external-engine acceptance; these versions match the independent query service.
+datafusion==50.1.0
+pyarrow==26.0.0

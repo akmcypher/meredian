@@ -1,0 +1,3 @@
+# hadolint: warnings and errors fail CI; per-line exceptions sit next
+# to the instruction they cover, with the reason.
+failure-threshold: warning

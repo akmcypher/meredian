@@ -1,0 +1,50 @@
+# Local development stack for the Supabase CLI (`supabase start`).
+# Hosted project settings live in the Supabase dashboard, not here.
+project_id = "meridian"
+
+[api]
+port = 54321
+schemas = ["public", "storage"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[db.seed]
+enabled = false
+
+[studio]
+port = 54323
+
+[inbucket]
+# Mailpit SMTP for the local email provider test (EMAIL_PROVIDER=smtp, SMTP_PORT=54325).
+smtp_port = 54325
+port = 54324
+
+[storage]
+file_size_limit = "50MiB"
+
+[auth]
+site_url = "http://localhost:8080"
+additional_redirect_urls = ["http://localhost:8080/auth/callback", "http://localhost:8080/auth/callback?flow=recovery"]
+jwt_expiry = 3600
+# Registration grants a verified workspace owner membership, never a global role.
+enable_signup = true
+minimum_password_length = 12
+password_requirements = "lower_upper_letters_digits"
+
+[auth.email]
+# Email ownership is required before application or workspace access.
+enable_signup = true
+enable_confirmations = true
+secure_password_change = true
+max_frequency = "1m"
+otp_expiry = 3600
+
+[auth.rate_limit]
+email_sent = 30
+sign_in_sign_ups = 30
+token_refresh = 150
+token_verifications = 30

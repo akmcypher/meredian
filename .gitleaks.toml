@@ -1,0 +1,10 @@
+# gitleaks configuration: the default rules plus narrow allowlists for
+# test vectors that look like secrets. Accepted findings in this repository's own history are in
+# .gitleaksignore.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Engine-token golden vectors: signed with a test-only Ed25519 key that is never configured anywhere"
+targetRules = ["jwt"]
+paths = ['''^deploy/datafusion/test_service\.py$''', '''^src/test/engine-token\.test\.ts$''']

@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:17@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
+    environment:
+      POSTGRES_USER: connect
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: connect
+    secrets: [postgres_password]
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    networks: [source]
+  source:
+    profiles: [contract]
+    build: {context: ., dockerfile: Dockerfile.source}
+    command: [spec]
+    read_only: true
+    mem_limit: 512m
+    cpus: 1
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [source]
+  destination:
+    profiles: [contract]
+    build: {context: ., dockerfile: Dockerfile.destination}
+    command: [spec]
+    read_only: true
+    mem_limit: 256m
+    cpus: 1
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  agent:
+    profiles: [replicate]
+    build: {context: ., dockerfile: Dockerfile.agent}
+    environment:
+      MERIDIAN_URL: ${MERIDIAN_URL:?}
+      INGEST_TOKEN_FILE: /run/secrets/ingest_token
+      CONNECT_SECRET_DIR: /run/secrets
+    volumes: ["${CONNECT_SECRET_DIR:?}:/run/secrets:ro"]
+    read_only: true
+    tmpfs: [/tmp:size=16m]
+    mem_limit: 768m
+    cpus: 1
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [source, outbound]
+    restart: unless-stopped
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_FILE:?}
+volumes:
+  postgres-data:
+networks:
+  source: {internal: true}
+  outbound: {}
