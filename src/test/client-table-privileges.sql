@@ -1,5 +1,9 @@
 -- Run with psql -v ON_ERROR_STOP=1 as the local migration owner. Always rolls back.
 BEGIN;
+DO $$ BEGIN
+  -- File-table registration is server-verified; clients never insert registry rows directly.
+  IF has_table_privilege('authenticated','public.file_tables','INSERT') THEN RAISE EXCEPTION 'Unexpected authenticated INSERT on file_tables'; END IF;
+END $$;
 CREATE TABLE public.meridian_acl_probe (id integer);
 CREATE TABLE core.meridian_acl_probe (id integer);
 DO $$

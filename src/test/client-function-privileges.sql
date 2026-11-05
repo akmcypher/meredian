@@ -1,6 +1,7 @@
 -- Transactional regression: effective grants and newly created functions.
 BEGIN;
 DO $$ DECLARE fn text; BEGIN
+ IF has_function_privilege('service_role','public.write_ingest_batch(uuid,integer,text,jsonb,jsonb,boolean,integer)','EXECUTE') THEN RAISE EXCEPTION 'Unfenced write_ingest_batch must stay internal'; END IF;
  IF has_function_privilege('anon','public.provision_workspace_for_user(uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: provision_workspace_for_user(uuid)'; END IF;
  IF has_function_privilege('authenticated','public.provision_workspace_for_user(uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: provision_workspace_for_user(uuid)'; END IF;
  IF has_function_privilege('anon','public.provision_verified_user()','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: provision_verified_user()'; END IF;
