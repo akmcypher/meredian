@@ -51,11 +51,31 @@ GRANT ALL ON SEQUENCE "public"."admin_audit_id_seq" TO "authenticated";
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."alert_settings" TO "authenticated";
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."audit_log" TO "authenticated";
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."change_requests" TO "authenticated";
+GRANT SELECT("id") ON TABLE "public"."connect_attempts" TO "authenticated";
+GRANT SELECT("run_id") ON TABLE "public"."connect_attempts" TO "authenticated";
+GRANT SELECT("attempt") ON TABLE "public"."connect_attempts" TO "authenticated";
+GRANT SELECT("status") ON TABLE "public"."connect_attempts" TO "authenticated";
+GRANT SELECT("started_at") ON TABLE "public"."connect_attempts" TO "authenticated";
+GRANT SELECT("finished_at") ON TABLE "public"."connect_attempts" TO "authenticated";
+GRANT SELECT("error_code") ON TABLE "public"."connect_attempts" TO "authenticated";
 GRANT SELECT ON TABLE "public"."connect_commits" TO "authenticated";
 GRANT SELECT ON TABLE "public"."connect_connections" TO "authenticated";
 GRANT SELECT ON TABLE "public"."connect_dead_letters" TO "authenticated";
 GRANT SELECT ON TABLE "public"."connect_events" TO "authenticated";
 GRANT SELECT ON TABLE "public"."connect_run_streams" TO "authenticated";
+GRANT SELECT("id") ON TABLE "public"."connect_runs" TO "authenticated";
+GRANT SELECT("connection_id") ON TABLE "public"."connect_runs" TO "authenticated";
+GRANT SELECT("request_key") ON TABLE "public"."connect_runs" TO "authenticated";
+GRANT SELECT("operation") ON TABLE "public"."connect_runs" TO "authenticated";
+GRANT SELECT("status") ON TABLE "public"."connect_runs" TO "authenticated";
+GRANT SELECT("attempts") ON TABLE "public"."connect_runs" TO "authenticated";
+GRANT SELECT("max_attempts") ON TABLE "public"."connect_runs" TO "authenticated";
+GRANT SELECT("next_attempt_at") ON TABLE "public"."connect_runs" TO "authenticated";
+GRANT SELECT("rows_committed") ON TABLE "public"."connect_runs" TO "authenticated";
+GRANT SELECT("bytes_committed") ON TABLE "public"."connect_runs" TO "authenticated";
+GRANT SELECT("error_code") ON TABLE "public"."connect_runs" TO "authenticated";
+GRANT SELECT("created_at") ON TABLE "public"."connect_runs" TO "authenticated";
+GRANT SELECT("finished_at") ON TABLE "public"."connect_runs" TO "authenticated";
 GRANT SELECT ON TABLE "public"."connect_streams" TO "authenticated";
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."connection_secrets" TO "authenticated";
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."connections" TO "authenticated";
@@ -338,6 +358,9 @@ REVOKE EXECUTE ON FUNCTION public.write_ingest_batch(uuid,integer,text,jsonb,jso
 REVOKE EXECUTE ON FUNCTION public.write_ingest_batch(uuid,integer,text,jsonb,jsonb,boolean,integer) FROM authenticated;
 REVOKE EXECUTE ON FUNCTION public.yield_ingest_partition_fenced(uuid,integer,text,uuid) FROM PUBLIC,anon;
 REVOKE EXECUTE ON FUNCTION public.yield_ingest_partition_fenced(uuid,integer,text,uuid) FROM authenticated;
+-- 20261104120000_0075_anonymous_sql_privileges.sql
+REVOKE ALL ON ALL TABLES IN SCHEMA public,core FROM anon;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public,core FROM anon;
 -- 20261104130000_0076_community_partition_publication.sql
 REVOKE ALL ON FUNCTION public.publish_ingest_run(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.publish_ingest_run(uuid) TO authenticated, service_role;
@@ -357,6 +380,8 @@ REVOKE ALL ON FUNCTION public.update_onboarding(integer,text,text,text) FROM PUB
 GRANT EXECUTE ON FUNCTION public.update_onboarding(integer,text,text,text) TO authenticated;
 REVOKE ALL ON FUNCTION public.update_account_profile(text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.update_account_profile(text) TO authenticated;
+REVOKE UPDATE ON public.profiles FROM authenticated;
+GRANT UPDATE(display_name) ON public.profiles TO authenticated;
 REVOKE ALL ON FUNCTION public.create_ingest_source_verified(uuid,text,text,text,jsonb,jsonb,text) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.create_ingest_source_verified(uuid,text,text,text,jsonb,jsonb,text) TO service_role;
 -- 20261104150000_0078_manifest_active_subject.sql
