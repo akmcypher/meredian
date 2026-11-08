@@ -1,6 +1,48 @@
 # Local development
 
-## Prerequisites
+## Windows installer (Community preview)
+
+On Windows 11 (x64 or ARM64) you can install without setting up the toolchain by hand. Download
+`meridian-<version>-windows.zip` and its `.sigstore.json` from the GitHub release, then optionally
+verify it with cosign (command at the top of `.github/workflows/release.yml`). Extract it to a short
+path such as `C:\meridian`, and run, from that folder:
+
+```powershell
+winget install --exact --id Docker.DockerDesktop   # once; start Docker Desktop and wait for "Engine running"
+.\meridian.cmd install     # checks Docker, gets Node 26 / Bun 1.4 / Supabase CLI 2.122.0, builds
+.\meridian.cmd start       # backend + web app in the background; opens http://localhost:8080
+.\meridian.cmd status      # tools, Docker, installation and health
+.\meridian.cmd stop        # stops the app and backend; data is kept
+.\meridian.cmd uninstall   # permanently deletes this installation (asks for its id; back up first)
+```
+
+Docker Desktop for Windows publishes container ports on every network interface by default, and
+`self-host.mjs` refuses to run a backend that is reachable from the network. Docker Desktop ignores
+the per-network loopback option the installer sets (and the engine `"ip"` setting), so once, in
+Docker Desktop > Settings > Resources > Network, set **Port binding behavior** to "Localhost by
+default" and choose "Apply & restart" (`install` checks this and explains it). It applies to every
+container that does not name an address, and the restart stops running containers; those with a
+restart policy come back.
+
+The launcher (`installer/windows/meridian.ps1`, run through `meridian.cmd`) wraps
+`scripts/self-host.mjs`; `bootstrap-admin`, `backup`, `restore`, `upgrade` and `check` are passed
+through. It uses Node, Bun and the Supabase CLI from PATH when the required version is there;
+otherwise it downloads pinned releases, checks them against SHA-256 hashes in the script, and keeps
+them in `%LOCALAPPDATA%\Meridian\tools` without changing PATH or installing anything system-wide.
+Docker Desktop is never installed for you. State and generated credentials stay in `.meridian\`
+inside the extracted folder; the zip contains only committed files, no secrets. `-Port` and
+`-BackendPort` on `install` choose other ports (defaults 8080 and 58321–58325). Logs are in
+`.meridian\logs\` (`.\meridian.cmd logs`). From a source checkout, run
+`installer\windows\meridian.cmd` the same way.
+
+Status: locally demonstrated on 2026-11-08 on Windows 11 ARM64 (Docker Desktop 4.97): clean extract,
+pinned tool downloads, install, start, sign-up with email confirmation, administrator bootstrap,
+stop, restart and uninstall. Not yet run on x64; release CI on x64 only smoke-tests the launcher. This is a single-machine preview, not a hosted or
+certified deployment. The launcher is not Authenticode-signed; the zip is signed with Sigstore.
+
+## Developing from source
+
+### Prerequisites
 
 - Bun (https://bun.sh)
 - Docker
