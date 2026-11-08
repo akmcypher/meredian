@@ -59,7 +59,12 @@ Users are responsible for evaluating the software, securing their deployment, co
 
 Start with [QUICKSTART.md](QUICKSTART.md) and the [user guide](docs/USER_GUIDE.md).
 
-See [docs/LOCAL_DEV.md](docs/LOCAL_DEV.md). You need Bun, Docker and the Supabase CLI.
+On Windows 11 (x64 or ARM64), download `meridian-<version>-windows.zip` from the release, start
+Docker Desktop, and run `.\meridian.cmd install` then `.\meridian.cmd start` in the extracted folder.
+The launcher fetches pinned, hash-verified Node, Bun and Supabase CLI builds if they are missing; see
+[Windows installer](docs/LOCAL_DEV.md#windows-installer-community-preview).
+
+Otherwise see [docs/LOCAL_DEV.md](docs/LOCAL_DEV.md). You need Bun, Docker and the Supabase CLI.
 
 ## Contributing and security
 
