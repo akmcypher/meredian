@@ -1,2 +1,4 @@
 # Keep LF in every checkout (Prettier enforces LF; Git for Windows defaults to CRLF).
 * text=auto eol=lf
+# Windows launcher files are run by cmd.exe and Windows PowerShell; keep them CRLF.
+installer/windows/** text eol=crlf

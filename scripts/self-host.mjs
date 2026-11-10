@@ -67,10 +67,11 @@ function startBackend() {
     const ports = JSON.parse(
       run("docker", ["inspect", "--format", "{{json .NetworkSettings.Ports}}", name]),
     );
+    // Docker Desktop's "Localhost by default" binds each port on both IPv4 and IPv6 loopback.
     if (
       Object.values(ports ?? {})
         .flat()
-        .some((binding) => binding && binding.HostIp !== "127.0.0.1")
+        .some((binding) => binding && !["127.0.0.1", "::1"].includes(binding.HostIp))
     )
       throw new Error(
         "Backend ports are not loopback-only; stop this installation before using accounts.",
