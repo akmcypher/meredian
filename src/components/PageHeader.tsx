@@ -30,7 +30,7 @@ export function Stat({
 }: {
   label: string;
   value: ReactNode;
-  tone?: "primary" | "destructive" | "success";
+  tone?: "primary" | "destructive" | "success" | undefined;
 }) {
   const c =
     tone === "primary"

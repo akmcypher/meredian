@@ -351,7 +351,9 @@ try {
     cpSync(join(root, "supabase", "migrations"), join(state, "supabase", "migrations"), {
       recursive: true,
     });
-    backend("migration", "up", "--local");
+    // Feature branches can add a migration below the latest already installed timestamp.
+    // Apply every missing forward migration instead of silently leaving those features absent.
+    backend("migration", "up", "--local", "--include-all");
     run("bun", ["install", "--frozen-lockfile"]);
     run("bun", ["run", "build"], { ...process.env, ...environment() });
     console.log("Forward upgrade complete. Verify application health before resuming agents.");
