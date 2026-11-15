@@ -33,7 +33,7 @@ Users are responsible for evaluating the software, securing their deployment, co
 
 ## What it does
 
-The full list is in [docs/FEATURES.md](docs/FEATURES.md).
+New here? Read the [plain-language overview](docs/OVERVIEW.md). The full list is in [docs/FEATURES.md](docs/FEATURES.md).
 
 - **Sources:** manual REST API pulls, a Push API endpoint, native file upload (CSV, TSV,
   Parquet, Avro, JSON, JSONL and NDJSON), and connector
