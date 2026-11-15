@@ -5,8 +5,12 @@ describe("Kafka certified preview availability", () => {
     const kafka = CONNECTORS.find((c) => c.id === "kafka")!;
     expect(kafka.status).toBe("Available — Certified Preview");
     expect(kafka.adapter).toBe("independent-worker");
-    expect(kafka.limitations).toMatch(/consumer-group scaling/);
-    expect(kafka.limitations).toMatch(/SASL\/TLS/);
+    // Secured clusters are certified (K1); managed services and authorization are not yet.
+    expect(kafka.capabilities).toMatch(/SCRAM-SHA-512/);
+    expect(kafka.capabilities).toMatch(/mutual TLS/);
+    expect(kafka.limitations).toMatch(/managed-service runs/);
+    expect(kafka.limitations).toMatch(/ACL authorization/);
+    expect(kafka.capabilities).toMatch(/backpressure/);
     expect(kafka.modes).toContain("streaming");
     expect(kafka.capabilities).toMatch(/topic discovery and multi-partition ingestion/);
     expect(kafka.capabilities).toMatch(/crash recovery without loss or duplicate positions/);

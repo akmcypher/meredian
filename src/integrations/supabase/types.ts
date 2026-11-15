@@ -103,14 +103,14 @@ isOneToOne: false
                   ]
                 },"connect_commits": {
                   Row: {
-                    "batch_id": string,"byte_count": number,"checkpoint": NonNullable<Json>,"created_at": string,"id": string,"manifest_key": string,"row_count": number,"run_id": string,"sequence": number,"sha256": string,"stream_id": string
+                    "batch_id": string,"byte_count": number,"checkpoint": NonNullable<Json>,"created_at": string,"id": string,"manifest_key": string,"row_count": number,"run_id": string,"sequence": number,"sha256": string,"shard": string,"shard_sequence": number | null,"stream_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "batch_id": string,"byte_count": number,"checkpoint": NonNullable<Json>,"created_at"?: string,"id"?: string,"manifest_key": string,"row_count": number,"run_id": string,"sequence": number,"sha256": string,"stream_id": string
+                    "batch_id": string,"byte_count": number,"checkpoint": NonNullable<Json>,"created_at"?: string,"id"?: string,"manifest_key": string,"row_count": number,"run_id": string,"sequence": number,"sha256": string,"shard"?: string,"shard_sequence"?: number | null,"stream_id": string
                   }
                   Update: {
-                    "batch_id"?: string,"byte_count"?: number,"checkpoint"?: NonNullable<Json>,"created_at"?: string,"id"?: string,"manifest_key"?: string,"row_count"?: number,"run_id"?: string,"sequence"?: number,"sha256"?: string,"stream_id"?: string
+                    "batch_id"?: string,"byte_count"?: number,"checkpoint"?: NonNullable<Json>,"created_at"?: string,"id"?: string,"manifest_key"?: string,"row_count"?: number,"run_id"?: string,"sequence"?: number,"sha256"?: string,"shard"?: string,"shard_sequence"?: number | null,"stream_id"?: string
                   }
                   Relationships: [
                     {
@@ -223,16 +223,42 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"connect_run_streams": {
+                },"connect_partition_lag": {
                   Row: {
-                    "checkpoint": NonNullable<Json>,"completed": boolean,"generation": number,"initial_state": NonNullable<Json>,"replay_deferred": number,"run_id": string,"schema_json": NonNullable<Json>,"sequence": number,"stream_id": string
+                    "end_offset": number,"lag": number | null,"observed_at": string,"partition": number,"position": number,"run_id": string,"stream_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "checkpoint"?: NonNullable<Json>,"completed"?: boolean,"generation": number,"initial_state": NonNullable<Json>,"replay_deferred"?: number,"run_id": string,"schema_json": NonNullable<Json>,"sequence"?: number,"stream_id": string
+                    "end_offset": number,"lag"?: never,"observed_at"?: string,"partition": number,"position": number,"run_id": string,"stream_id": string
                   }
                   Update: {
-                    "checkpoint"?: NonNullable<Json>,"completed"?: boolean,"generation"?: number,"initial_state"?: NonNullable<Json>,"replay_deferred"?: number,"run_id"?: string,"schema_json"?: NonNullable<Json>,"sequence"?: number,"stream_id"?: string
+                    "end_offset"?: number,"lag"?: never,"observed_at"?: string,"partition"?: number,"position"?: number,"run_id"?: string,"stream_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "connect_partition_lag_run_id_fkey"
+      columns: ["run_id"]
+isOneToOne: false
+      referencedRelation: "connect_runs"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "connect_partition_lag_stream_id_fkey"
+      columns: ["stream_id"]
+isOneToOne: false
+      referencedRelation: "connect_streams"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"connect_run_streams": {
+                  Row: {
+                    "attempts": number,"checkpoint": NonNullable<Json>,"completed": boolean,"error_code": string | null,"finished_at": string | null,"generation": number,"initial_state": NonNullable<Json>,"lease_token": string | null,"lease_until": string | null,"next_attempt_at": string,"replay_deferred": number,"run_id": string,"schema_json": NonNullable<Json>,"sequence": number,"shard": string,"started_at": string | null,"stream_id": string,"task_status": string,"worker": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"checkpoint"?: NonNullable<Json>,"completed"?: boolean,"error_code"?: string | null,"finished_at"?: string | null,"generation": number,"initial_state": NonNullable<Json>,"lease_token"?: string | null,"lease_until"?: string | null,"next_attempt_at"?: string,"replay_deferred"?: number,"run_id": string,"schema_json": NonNullable<Json>,"sequence"?: number,"shard"?: string,"started_at"?: string | null,"stream_id": string,"task_status"?: string,"worker"?: string | null
+                  }
+                  Update: {
+                    "attempts"?: number,"checkpoint"?: NonNullable<Json>,"completed"?: boolean,"error_code"?: string | null,"finished_at"?: string | null,"generation"?: number,"initial_state"?: NonNullable<Json>,"lease_token"?: string | null,"lease_until"?: string | null,"next_attempt_at"?: string,"replay_deferred"?: number,"run_id"?: string,"schema_json"?: NonNullable<Json>,"sequence"?: number,"shard"?: string,"started_at"?: string | null,"stream_id"?: string,"task_status"?: string,"worker"?: string | null
                   }
                   Relationships: [
                     {
@@ -251,14 +277,14 @@ isOneToOne: false
                   ]
                 },"connect_runs": {
                   Row: {
-                    "attempts": number,"bytes_committed": number,"connection_id": string,"created_at": string,"error_code": string | null,"finished_at": string | null,"id": string,"lease_token": string | null,"lease_until": string | null,"max_attempts": number,"next_attempt_at": string,"operation": string,"request_key": string,"rows_committed": number,"status": string
+                    "attempts": number,"bytes_committed": number,"connection_id": string,"created_at": string,"error_code": string | null,"finished_at": string | null,"id": string,"lease_mode": string | null,"lease_token": string | null,"lease_until": string | null,"max_attempts": number,"next_attempt_at": string,"operation": string,"request_key": string,"rows_committed": number,"status": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "attempts"?: number,"bytes_committed"?: number,"connection_id": string,"created_at"?: string,"error_code"?: string | null,"finished_at"?: string | null,"id"?: string,"lease_token"?: string | null,"lease_until"?: string | null,"max_attempts"?: number,"next_attempt_at"?: string,"operation": string,"request_key": string,"rows_committed"?: number,"status"?: string
+                    "attempts"?: number,"bytes_committed"?: number,"connection_id": string,"created_at"?: string,"error_code"?: string | null,"finished_at"?: string | null,"id"?: string,"lease_mode"?: string | null,"lease_token"?: string | null,"lease_until"?: string | null,"max_attempts"?: number,"next_attempt_at"?: string,"operation": string,"request_key": string,"rows_committed"?: number,"status"?: string
                   }
                   Update: {
-                    "attempts"?: number,"bytes_committed"?: number,"connection_id"?: string,"created_at"?: string,"error_code"?: string | null,"finished_at"?: string | null,"id"?: string,"lease_token"?: string | null,"lease_until"?: string | null,"max_attempts"?: number,"next_attempt_at"?: string,"operation"?: string,"request_key"?: string,"rows_committed"?: number,"status"?: string
+                    "attempts"?: number,"bytes_committed"?: number,"connection_id"?: string,"created_at"?: string,"error_code"?: string | null,"finished_at"?: string | null,"id"?: string,"lease_mode"?: string | null,"lease_token"?: string | null,"lease_until"?: string | null,"max_attempts"?: number,"next_attempt_at"?: string,"operation"?: string,"request_key"?: string,"rows_committed"?: number,"status"?: string
                   }
                   Relationships: [
                     {
@@ -755,7 +781,13 @@ isOneToOne: false
                     "columns"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string,"id"?: string,"operation"?: string,"row_count"?: number,"rows"?: NonNullable<Json>,"table_id"?: string | null,"table_name"?: string,"version"?: number
                   }
                   Relationships: [
-                    
+                    {
+      foreignKeyName: "table_versions_table_id_fkey"
+      columns: ["table_id"]
+isOneToOne: false
+      referencedRelation: "user_tables"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"user_roles": {
                   Row: {
@@ -797,30 +829,7 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-      write_native_table: { Args: { _name: string; _rows: Json; _columns: Json; _operation: string; _table_id?: string }; Returns: number };
-
-            "ensure_workspace":
-{ Args: Record<PropertyKey, never>; Returns: Json
-                           },
-"is_active_user":
-{ Args: Record<PropertyKey, never>; Returns: boolean
-                           },
-"require_active_subject":
-{ Args: { "_subject": string }; Returns: undefined
-                           },
-"provision_workspace_for_user":
-{ Args: { "_user": string }; Returns: string
-                           },
-"select_workspace":
-{ Args: { "_workspace": string }; Returns: Json
-                           },
-"update_account_profile":
-{ Args: { "_name": string }; Returns: Json
-                           },
-"update_onboarding":
-{ Args: { "_description"?: string,"_first_source"?: string,"_name"?: string,"_step": number }; Returns: Json
-                           },
-"apply_file_table_policies":
+            "apply_file_table_policies":
 { Args: { "_rows": Json,"_table": string }; Returns: Json
                            },
 "apply_licence_entitlements":
@@ -918,8 +927,14 @@ isOneToOne: false
 "connect_claim":
 { Args: { "_connection": string }; Returns: Json
                            },
+"connect_claim_task":
+{ Args: { "_connection": string,"_worker"?: string }; Returns: Json
+                           },
 "connect_commit":
 { Args: { "_batch": string,"_bytes": number,"_checkpoint": Json,"_completed": boolean,"_manifest": string,"_rows": number,"_run": string,"_sequence": number,"_sha": string,"_stream": string,"_token": string }; Returns: string
+                           },
+"connect_defer_replay":
+{ Args: { "_ids": (string)[],"_run": string,"_stream": string,"_token": string }; Returns: number
                            },
 "connect_discard_dead_letters":
 { Args: { "_connection": string,"_dead_letters": (string)[] }; Returns: number
@@ -927,27 +942,41 @@ isOneToOne: false
 "connect_enqueue":
 { Args: { "_connection": string,"_operation": string,"_request": string }; Returns: string
                            },
-      connect_defer_replay: {
-        Args: { _ids: string[]; _run: string; _stream: string; _token: string };
-        Returns: number;
-      };
 "connect_enqueue_replay":
 { Args: { "_connection": string,"_dead_letters": (string)[],"_request": string }; Returns: string
+                           },
+"connect_fail_task_run":
+{ Args: { "_code": string,"_run": string }; Returns: undefined
                            },
 "connect_finish":
 { Args: { "_catalog"?: Json,"_code": string,"_ok": boolean,"_run": string,"_token": string }; Returns: boolean
                            },
+"connect_finish_task":
+{ Args: { "_code": string,"_ok": boolean,"_run": string,"_token": string }; Returns: boolean
+                           },
 "connect_heartbeat":
 { Args: { "_run": string,"_token": string }; Returns: boolean
                            },
+"connect_lease_check":
+{ Args: { "_run": string,"_stream"?: string,"_token": string }; Returns: boolean
+                           },
+"connect_lease_valid":
+{ Args: { "_stream": string,"_token": string,"r": Omit<Database["public"]['Tables']["connect_runs"]['Row'], Database["public"]['Tables']["connect_runs"]['ComputedFields']> }; Returns: boolean
+                           },
 "connect_record_dead_letters":
 { Args: { "_entries": Json,"_object": string,"_run": string,"_sequence": number,"_stream": string,"_token": string }; Returns: number
+                           },
+"connect_record_lag":
+{ Args: { "_partitions": Json,"_run": string,"_stream": string,"_token": string }; Returns: number
                            },
 "connect_report":
 { Args: { "_code": string,"_detail": Json,"_run": string,"_stream"?: string,"_token": string }; Returns: boolean
                            },
 "connect_rewind_stream":
 { Args: { "_state": Json,"_stream": string }; Returns: boolean
+                           },
+"connect_split_task":
+{ Args: { "_run": string,"_shards": (string)[],"_token": string }; Returns: number
                            },
 "consume_rate_limit":
 { Args: { "_key": string,"_limit": number,"_window_seconds": number }; Returns: boolean
@@ -967,6 +996,12 @@ isOneToOne: false
 "dataset_policy_decision":
 { Args: { "_dataset": string,"_subject": string }; Returns: Json
                            },
+"enforce_verified_account":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"ensure_workspace":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
 "fail_ingest_partition_fenced":
 { Args: { "_error": string,"_idx": number,"_lease_token": string,"_run": string,"_worker": string }; Returns: boolean
                            },
@@ -985,6 +1020,9 @@ isOneToOne: false
 "heartbeat_ingest_partition_fenced":
 { Args: { "_idx": number,"_lease_seconds"?: number,"_lease_token": string,"_run": string,"_worker": string }; Returns: boolean
                            },
+"is_active_user":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
 "is_org_member":
 { Args: { "_org": string }; Returns: boolean
                            },
@@ -993,6 +1031,9 @@ isOneToOne: false
                            },
 "mask_text":
 { Args: { "_mode": string,"_v": string }; Returns: string
+                           },
+"provision_workspace_for_user":
+{ Args: { "_user": string }; Returns: string
                            },
 "publish_ingest_run":
 { Args: { "_run": string }; Returns: number
@@ -1011,6 +1052,9 @@ isOneToOne: false
 "register_verified_file_table":
 { Args: { "_columns": (string)[],"_manifest_sha": string,"_name": string,"_org": string,"_owner": string,"_parts": number,"_prefix": string,"_rows": number,"_source_sha": string }; Returns: string
                            },
+"require_active_subject":
+{ Args: { "_subject": string }; Returns: undefined
+                           },
 "row_passes":
 { Args: { "_col": string,"_op": string,"_row": Json,"_val": string }; Returns: boolean
                            },
@@ -1022,18 +1066,27 @@ isOneToOne: false
               "columns": Json,"created_at": string,"filtered": boolean,"id": string,"masked": (string)[],"name": string,"owner_id": string,"row_count": number,"rows": Json
             }[]
                            },
+"select_workspace":
+{ Args: { "_workspace": string }; Returns: Json
+                           },
 "serve_connect_bronze":
 { Args: { "_after"?: number,"_engine": string,"_run": string,"_stream": string,"_subject": string }; Returns: {
               "bucket": string,"byte_count": number,"created_at": string,"dataset_id": string,"evidence_class": string,"format": string,"layer": string,"name": string,"namespace": string,"object_key": string,"produced_by": Json,"row_count": number,"schema": Json,"sequence": number,"sha256": string,"version_id": string
             }[]
                            },
-      "serve_manifest":
+"serve_manifest":
 { Args: { "_names": (string)[],"_subject": string }; Returns: {
               "bucket": string,"byte_count": number,"created_at": string,"dataset_id": string,"evidence_class": string,"layer": string,"name": string,"object_key": string,"policy": Json,"produced_by": Json,"row_count": number,"schema": Json,"sha256": string,"version_id": string
             }[]
                            },
 "shares_org_with":
 { Args: { "_user": string }; Returns: boolean
+                           },
+"update_account_profile":
+{ Args: { "_name": string }; Returns: Json
+                           },
+"update_onboarding":
+{ Args: { "_description"?: string,"_first_source"?: string,"_name"?: string,"_step": number }; Returns: Json
                            },
 "verify_admin_audit":
 { Args: Record<PropertyKey, never>; Returns: {
@@ -1045,6 +1098,9 @@ isOneToOne: false
                            },
 "write_ingest_batch_fenced":
 { Args: { "_checkpoint": Json,"_done": boolean,"_idx": number,"_lease_seconds"?: number,"_lease_token": string,"_rows": Json,"_run": string,"_worker": string }; Returns: number
+                           },
+"write_native_table":
+{ Args: { "_columns": Json,"_name": string,"_operation": string,"_rows": Json,"_table_id"?: string }; Returns: number
                            },
 "yield_ingest_partition_fenced":
 { Args: { "_idx": number,"_lease_token": string,"_run": string,"_worker": string }; Returns: boolean

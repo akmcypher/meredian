@@ -1,4 +1,6 @@
 import { z } from "zod";
+// A Spark part: <partition>-<part number within the partition>.
+export const SPARK_PART = /^[0-9]{1,6}-[0-9]{1,6}$/;
 export const CONNECT_PROTOCOL = "meridian-connect/1";
 export const identifier = z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]{0,62}$/);
 export const primaryKeySpec = z.union([identifier, z.array(identifier).min(1).max(16)]);
@@ -48,6 +50,26 @@ export const stateMessage = z.object({
     replayed: z.array(z.string().uuid()).max(1000).optional(),
     // Offset ranges retention deleted before they were read, accepted by the owner for this run.
     gaps: z.array(offsetRange).max(1000).optional(),
+    // Spark runs: per hash partition, the last committed position and whether it is done, so a
+    // new attempt of the same run resumes each partition inside the same window. consistency:
+    // "single" (one snapshot), "partition" (one snapshot per partition, MySQL) or "mixed" (an
+    // attempt resumed after its snapshot was lost).
+    spark: z
+      .object({
+        run: z.string().uuid(),
+        partitions: z.number().int().min(1).max(4096),
+        consistency: z.enum(["single", "partition", "mixed"]),
+        // Incremental: the (cursor, key) positions the run reads after and up to; null = open.
+        window: z.object({ after: z.unknown(), until: z.unknown() }),
+        // Files: the planned ranges ([key, size, modified, kind, a, b, base]), kept so a resumed
+        // attempt reads the same ranges of the same object versions.
+        plan: z.array(z.array(z.unknown()).max(7)).max(4096).optional(),
+        progress: z.record(
+          z.string().regex(/^[0-9]{1,4}$/),
+          z.object({ after: z.unknown(), done: z.boolean() }),
+        ),
+      })
+      .optional(),
   }),
 });
 export const deadLetterCode = z.enum([
@@ -114,6 +136,14 @@ export const reportDetail = z
   .strict();
 export const agentRequest = z.discriminatedUnion("action", [
   z.object({ action: z.literal("claim") }),
+  // Task-capable agents claim one stream of a run at a time; several can work on a run at once.
+  z.object({
+    action: z.literal("claim_task"),
+    worker: z
+      .string()
+      .regex(/^[\w.:-]{1,200}$/)
+      .optional(),
+  }),
   z.object({
     action: z.literal("report"),
     runId: z.string().uuid(),
@@ -129,6 +159,33 @@ export const agentRequest = z.discriminatedUnion("action", [
     streamId: z.string().uuid().optional(),
   }),
   z.object({ action: z.literal("heartbeat"), runId: z.string().uuid(), token: z.string().uuid() }),
+  // Kafka progress: committed position and end offset per partition (offsets as decimal strings).
+  z.object({
+    action: z.literal("lag"),
+    runId: z.string().uuid(),
+    token: z.string().uuid(),
+    streamId: z.string().uuid(),
+    partitions: z
+      .array(
+        z.object({
+          partition: z.string().regex(/^[0-9]{1,6}$/),
+          position: z.string().regex(/^[0-9]{1,20}$/),
+          end: z.string().regex(/^[0-9]{1,20}$/),
+        }),
+      )
+      .min(1)
+      .max(1024),
+  }),
+  // A partitioned stream's planning task replaces itself with one task per partition (Kafka).
+  z.object({
+    action: z.literal("split"),
+    runId: z.string().uuid(),
+    token: z.string().uuid(),
+    shards: z
+      .array(z.string().regex(/^[0-9]{1,6}$/))
+      .min(1)
+      .max(1024),
+  }),
   z.object({
     action: z.literal("finish"),
     runId: z.string().uuid(),
@@ -144,6 +201,34 @@ export const agentRequest = z.discriminatedUnion("action", [
     streamId: z.string().uuid(),
     sequence: z.number().int().nonnegative(),
     records: z.array(recordMessage).max(1000),
+    dead_letters: z.array(deadLetterMessage).max(1000).optional(),
+    state: stateMessage,
+  }),
+  // Spark direct writes (deploy/connect/README.md, "Spark ingestion"): a signed upload URL for one
+  // Bronze part, then a fenced commit of the part the executor wrote.
+  z.object({
+    action: z.literal("upload_url"),
+    runId: z.string().uuid(),
+    token: z.string().uuid(),
+    streamId: z.string().uuid(),
+    part: z.string().regex(SPARK_PART),
+  }),
+  z.object({
+    action: z.literal("commit_file"),
+    runId: z.string().uuid(),
+    token: z.string().uuid(),
+    streamId: z.string().uuid(),
+    sequence: z.number().int().nonnegative(),
+    part: z.string().regex(SPARK_PART),
+    rows: z.number().int().min(0).max(10000),
+    bytes: z
+      .number()
+      .int()
+      .min(0)
+      .max(8 * 1024 * 1024),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    executor: z.string().max(200).optional(),
+    // Records the executor could not decode (Kafka), committed with the part that skips them.
     dead_letters: z.array(deadLetterMessage).max(1000).optional(),
     state: stateMessage,
   }),

@@ -1,0 +1,859 @@
+#!/bin/sh
+# Meridian Community launcher for macOS (Apple silicon and Intel) and Linux (x64 and ARM64).
+#
+# Wraps scripts/self-host.mjs, the single-machine preview installer. Docker must be installed and
+# running (Docker Desktop on macOS; Docker Engine on Linux). Node.js, Bun and the Supabase CLI are
+# used from PATH when the required version is there; otherwise pinned releases are downloaded,
+# verified against the SHA-256 hashes in this file, and kept in a per-user tool cache:
+#   macOS  ~/Library/Application Support/Meridian/tools
+#   Linux  ${XDG_DATA_HOME:-~/.local/share}/meridian/tools
+# (override with MERIDIAN_TOOLS_DIR). Nothing is installed system-wide, nothing runs with sudo,
+# and shell profiles and PATH are not changed.
+#
+# Installation state and generated credentials stay in .meridian/ next to this script. This is a
+# local preview installation, not a hosted or certified deployment.
+#
+#   ./meridian install
+#   ./meridian start
+#   ./meridian status
+#   ./meridian stop
+#   ./meridian uninstall
+set -eu
+
+# -------------------------------------------------------------------------------------------------
+# Pinned toolchain. Versions match .github CI, QUICKSTART.md and installer/windows/meridian.ps1;
+# hashes come from each project's published checksum file for that exact release asset
+# (nodejs.org SHASUMS256.txt, oven-sh/bun SHASUMS256.txt, supabase/cli checksums.txt).
+# -------------------------------------------------------------------------------------------------
+NODE_VERSION=26.13.0
+BUN_VERSION=1.4.4
+SUPABASE_VERSION=2.122.0
+
+# Sets PIN_URL, PIN_SHA, PIN_EXE (path of the executable inside the archive) and PIN_FORMAT.
+pin() {
+  case "$1-$OS-$ARCH" in
+    node-macos-arm64) PIN_SHA=d38bd5e5a2ddce6bbb5ce45e46e208337da4d51fffe611e567fd32073d6439f6 ;;
+    node-macos-x64) PIN_SHA=525c9b29bb0263d687de60a4cec0e2a6db876a8eb032369e5795eca71e7c358e ;;
+    node-linux-arm64) PIN_SHA=439e9c438acdf6a6ffe47418da709153d66c4bed812e30a473faacb107dd2791 ;;
+    node-linux-x64) PIN_SHA=5848553868b402d3fabb5b09270649977780a390f832155721025a08b5104455 ;;
+    bun-macos-arm64) PIN_SHA=c240d7f0ccb90c263a849fcdb09b7ee62630d921348ed6aafda86b9d577bc510 ;;
+    bun-macos-x64) PIN_SHA=d4a155adfbfd09155eb3ba05c9e3a544f39297d7a68616d3c7759f67ab5c47dc ;;
+    bun-linux-arm64) PIN_SHA=baa6bb36f51d6e58561e02bbea825038a9df454f673d6d776e8bbf86f8c7850e ;;
+    bun-linux-x64) PIN_SHA=e0446eb55995772eb9894bebae9a6be368d985a8b9271ee124486f9946eedd76 ;;
+    supabase-macos-arm64) PIN_SHA=fe87a5f9781d5423dbd5ebba2d5a6e1a541d01754d14941c574952e5695eaab0 ;;
+    supabase-macos-x64) PIN_SHA=8be7d5bb00091e67618d12fb0a4a1bb10624c69435ecd5b9b95d91d571cc34d8 ;;
+    supabase-linux-arm64) PIN_SHA=8980b46044aba0863f26a1b4134a498d2c74df0dadf24289bb4faa86729511cc ;;
+    supabase-linux-x64) PIN_SHA=59ed066847b98d7461c60e9109d40cab6b9756177ce06ebb05b51338519f5136 ;;
+    *) fail "No pinned $1 build for $OS $ARCH." ;;
+  esac
+  case "$OS" in macos) pin_os=darwin ;; *) pin_os=linux ;; esac
+  case "$1" in
+    node)
+      pin_name="node-v$NODE_VERSION-$pin_os-$ARCH"
+      PIN_URL="https://nodejs.org/dist/v$NODE_VERSION/$pin_name.tar.gz"
+      PIN_EXE="$pin_name/bin/node"
+      PIN_FORMAT=tar.gz
+      ;;
+    bun)
+      # The x64 baseline build runs on CPUs without AVX2, like the Windows launcher's choice.
+      case "$ARCH" in arm64) pin_name="bun-$pin_os-aarch64" ;; *) pin_name="bun-$pin_os-x64-baseline" ;; esac
+      PIN_URL="https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION/$pin_name.zip"
+      PIN_EXE="$pin_name/bun"
+      PIN_FORMAT=zip
+      ;;
+    supabase)
+      case "$ARCH" in arm64) pin_arch=arm64 ;; *) pin_arch=amd64 ;; esac
+      PIN_URL="https://github.com/supabase/cli/releases/download/v$SUPABASE_VERSION/supabase_${SUPABASE_VERSION}_${pin_os}_$pin_arch.tar.gz"
+      PIN_EXE=supabase
+      PIN_FORMAT=tar.gz
+      ;;
+  esac
+}
+
+tool_pinned_version() {
+  case "$1" in node) echo "$NODE_VERSION" ;; bun) echo "$BUN_VERSION" ;; *) echo "$SUPABASE_VERSION" ;; esac
+}
+
+# -------------------------------------------------------------------------------------------------
+# Output helpers
+# -------------------------------------------------------------------------------------------------
+if [ -t 1 ]; then
+  C_STEP=$(printf '\033[36m'); C_OK=$(printf '\033[32m'); C_WARN=$(printf '\033[33m')
+  C_ERR=$(printf '\033[31m'); C_OFF=$(printf '\033[0m')
+else
+  C_STEP=''; C_OK=''; C_WARN=''; C_ERR=''; C_OFF=''
+fi
+step() { printf '%s==> %s%s\n' "$C_STEP" "$1" "$C_OFF"; }
+note() { printf '    %s\n' "$1"; }
+ok() { printf '%s%s%s\n' "$C_OK" "$1" "$C_OFF"; }
+warn() { printf '%s%s%s\n' "$C_WARN" "$1" "$C_OFF"; }
+fail() { printf '%serror: %s%s\n' "$C_ERR" "$1" "$C_OFF" >&2; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# -------------------------------------------------------------------------------------------------
+# Locations. The launcher sits at the package root in the release tarball, and at
+# installer/posix/ in a source checkout.
+# -------------------------------------------------------------------------------------------------
+HERE=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+ROOT=$HERE
+if [ ! -f "$ROOT/scripts/self-host.mjs" ]; then
+  ROOT=$(CDPATH='' cd -- "$HERE/../.." && pwd -P)
+fi
+SELF_HOST="$ROOT/scripts/self-host.mjs"
+[ -f "$SELF_HOST" ] || fail "scripts/self-host.mjs not found next to $0."
+STATE="$ROOT/.meridian"
+MANIFEST="$STATE/installation.json"
+PID_FILE="$STATE/app.pid"
+LOG_DIR="$STATE/logs"
+UPGRADE_MARKER="$STATE/upgrade-required"
+MERIDIAN_CMD=./meridian
+
+# A package manager (the Homebrew formula) installs this tree read-only, writes its version to
+# .meridian-version and sets MERIDIAN_HOME. The launcher then copies the tree to
+# $MERIDIAN_HOME/app, where the installation's state, dependencies and build live, and runs from
+# there. A new version replaces the copied source but keeps .meridian/, node_modules/ and .output/,
+# and start waits until `meridian upgrade` has applied it.
+stage_source() {
+  ss_new=$(cat "$ROOT/.meridian-version" 2>/dev/null || echo unversioned)
+  ss_old=$(cat "$APP_DIR/.meridian-version" 2>/dev/null || true)
+  if [ "$ss_new" = "$ss_old" ] && [ -f "$APP_DIR/meridian" ]; then return 0; fi
+  ss_installed=0
+  if [ -f "$APP_DIR/.meridian/installation.json" ]; then ss_installed=1; fi
+  if [ "$ss_installed" = 1 ] && [ -f "$APP_DIR/.meridian/app.pid" ]; then
+    ss_pid=$(tr -cd '0-9' <"$APP_DIR/.meridian/app.pid")
+    case "$(ps -p "${ss_pid:-0}" -o command= 2>/dev/null || true)" in
+      *self-host.mjs*start*)
+        # The running version stays in charge until it is stopped.
+        case "${1:-help}" in
+          stop | status | logs | help | -h | --help) MERIDIAN_STAGED=1 exec sh "$APP_DIR/meridian" "$@" ;;
+        esac
+        fail "Meridian ${ss_old:-(previous version)} is running. Run: meridian stop, then retry."
+        ;;
+    esac
+  fi
+  mkdir -p "$MERIDIAN_HOME"
+  ss_next="$APP_DIR.next"
+  rm -rf "$ss_next"
+  mkdir -p "$ss_next"
+  (cd "$ROOT" && tar -cf - --exclude=./.meridian --exclude=./node_modules --exclude=./.output .) |
+    (cd "$ss_next" && tar -xf -)
+  chmod -R u+w "$ss_next"
+  for ss_keep in .meridian node_modules .output; do
+    if [ -e "$APP_DIR/$ss_keep" ]; then mv "$APP_DIR/$ss_keep" "$ss_next/"; fi
+  done
+  rm -rf "$APP_DIR"
+  mv "$ss_next" "$APP_DIR"
+  if [ "$ss_installed" = 1 ]; then
+    : >"$APP_DIR/.meridian/upgrade-required"
+    note "Meridian source updated to $ss_new in $APP_DIR."
+    note 'Run: meridian upgrade   (applies new database migrations and rebuilds; stop the app first)'
+  fi
+}
+
+if [ -n "${MERIDIAN_HOME:-}" ]; then
+  case "$MERIDIAN_HOME" in
+    / | //* | *..*) fail "MERIDIAN_HOME must be a dedicated directory, not '$MERIDIAN_HOME'." ;;
+    /*) ;;
+    *) fail "MERIDIAN_HOME must be an absolute path, not '$MERIDIAN_HOME'." ;;
+  esac
+  MERIDIAN_CMD=meridian
+  APP_DIR="$MERIDIAN_HOME/app"
+  if [ "${MERIDIAN_STAGED:-}" != 1 ]; then
+    stage_source "$@"
+    MERIDIAN_STAGED=1 exec sh "$APP_DIR/meridian" "$@"
+  fi
+fi
+
+detect_platform() {
+  case "$(uname -s)" in
+    Darwin) OS=macos ;;
+    Linux) OS=linux ;;
+    *) fail "Unsupported operating system '$(uname -s)'. This launcher supports macOS and Linux; use meridian.cmd on Windows." ;;
+  esac
+  case "$(uname -m)" in
+    x86_64 | amd64) ARCH=x64 ;;
+    arm64 | aarch64) ARCH=arm64 ;;
+    *) fail "Unsupported processor architecture '$(uname -m)'. Meridian supports x64 and ARM64." ;;
+  esac
+  # A shell running under Rosetta 2 reports x86_64 on Apple silicon; use the native toolchain.
+  if [ "$OS" = macos ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = 1 ]; then
+    ARCH=arm64
+  fi
+  if [ -n "${MERIDIAN_TOOLS_DIR:-}" ]; then
+    TOOLS_DIR=$MERIDIAN_TOOLS_DIR
+  elif [ "$OS" = macos ]; then
+    TOOLS_DIR="$HOME/Library/Application Support/Meridian/tools"
+  else
+    TOOLS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/meridian/tools"
+  fi
+}
+
+# -------------------------------------------------------------------------------------------------
+# Toolchain
+# -------------------------------------------------------------------------------------------------
+tool_version() {
+  "$1" --version 2>/dev/null | head -n 1 | sed 's/^v//' | tr -d '[:space:]' || true
+}
+
+version_ok() {
+  [ -n "$2" ] || return 1
+  case "$1" in
+    node) [ "${2%%.*}" -ge 26 ] 2>/dev/null ;;
+    bun) case "$2" in 1.4.*) return 0 ;; *) return 1 ;; esac ;;
+    supabase) [ "$2" = "$SUPABASE_VERSION" ] ;;
+  esac
+}
+
+# Fails unless the executable starts. A pinned build can need a system library the distribution
+# leaves out of minimal images (Node.js on ARM64 Linux needs libatomic1).
+ensure_runs() {
+  if er_err=$("$2" --version 2>&1 >/dev/null); then return 0; fi
+  case "$er_err" in
+    *libatomic*) er_hint='Install the missing library (Ubuntu/Debian: sudo apt install libatomic1), then retry.' ;;
+    *) er_hint="Remove $(dirname -- "$2") and retry, or put a working $1 on PATH." ;;
+  esac
+  fail "$1 at $2 does not start: $(printf '%s' "$er_err" | head -n 1)
+    $er_hint"
+}
+
+sha256_of() {
+  if have sha256sum; then
+    sha256sum "$1" | cut -d ' ' -f 1
+  elif have shasum; then
+    shasum -a 256 "$1" | cut -d ' ' -f 1
+  else
+    fail "Neither sha256sum nor shasum is available to verify downloads."
+  fi
+}
+
+download() {
+  if have curl; then
+    curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$2" "$1"
+  elif have wget; then
+    wget -q --https-only -O "$2" "$1"
+  else
+    fail "curl or wget is required to download the toolchain (Ubuntu: sudo apt install curl)."
+  fi
+}
+
+extract_zip() {
+  if have unzip; then
+    unzip -q "$1" -d "$2"
+  elif have python3; then
+    python3 -I -m zipfile -e "$1" "$2"
+  else
+    fail "unzip is required to unpack Bun (Ubuntu: sudo apt install unzip)."
+  fi
+}
+
+# Prints the cached executable path for a pinned tool (it may not exist yet).
+cached_tool() {
+  pin "$1"
+  printf '%s/%s-%s-%s-%s/%s\n' "$TOOLS_DIR" "$1" "$(tool_pinned_version "$1")" "$OS" "$ARCH" "$PIN_EXE"
+}
+
+install_tool() {
+  pin "$1"
+  it_version=$(tool_pinned_version "$1")
+  it_target="$TOOLS_DIR/$1-$it_version-$OS-$ARCH"
+  it_exe="$it_target/$PIN_EXE"
+  if [ -x "$it_exe" ]; then printf '%s\n' "$it_exe"; return 0; fi
+  mkdir -p "$TOOLS_DIR"
+  it_file="$TOOLS_DIR/$1-$it_version-$OS-$ARCH.download"
+  note "downloading $1 $it_version ($OS $ARCH) from $PIN_URL" >&2
+  rm -f "$it_file"
+  download "$PIN_URL" "$it_file" || { rm -f "$it_file"; fail "Downloading $1 failed. Nothing was installed."; }
+  it_actual=$(sha256_of "$it_file")
+  if [ "$it_actual" != "$PIN_SHA" ]; then
+    rm -f "$it_file"
+    fail "$1 download failed SHA-256 verification (expected $PIN_SHA, got $it_actual). Nothing was installed."
+  fi
+  it_staging="$it_target.partial"
+  rm -rf "$it_staging"
+  mkdir -p "$it_staging"
+  if [ "$PIN_FORMAT" = zip ]; then
+    extract_zip "$it_file" "$it_staging"
+  else
+    tar -xzf "$it_file" -C "$it_staging"
+  fi
+  rm -f "$it_file"
+  rm -rf "$it_target"
+  mv "$it_staging" "$it_target"
+  [ -f "$it_exe" ] || fail "$1 archive did not contain $PIN_EXE."
+  # python3's zipfile does not keep the executable bit.
+  chmod +x "$it_exe"
+  printf '%s\n' "$it_exe"
+}
+
+# Resolves node, bun and supabase, downloading pinned copies when allowed ($1 = 1), and puts their
+# directories first on PATH for this process and its children (self-host.mjs calls them by name).
+# Sets TOOL_node, TOOL_bun and TOOL_supabase (empty when missing).
+resolve_toolchain() {
+  rt_dirs=''
+  for rt_name in node bun supabase; do
+    rt_exe=''
+    if have "$rt_name"; then
+      rt_found=$(command -v "$rt_name")
+      if version_ok "$rt_name" "$(tool_version "$rt_found")"; then rt_exe=$rt_found; fi
+    fi
+    if [ -z "$rt_exe" ]; then
+      rt_cached=$(cached_tool "$rt_name")
+      if [ -x "$rt_cached" ]; then
+        rt_exe=$rt_cached
+      elif [ "$1" = 1 ]; then
+        rt_exe=$(install_tool "$rt_name")
+      fi
+    fi
+    if [ -n "$rt_exe" ]; then ensure_runs "$rt_name" "$rt_exe"; fi
+    eval "TOOL_$rt_name=\$rt_exe"
+    if [ -n "$rt_exe" ]; then rt_dirs="$rt_dirs$(dirname -- "$rt_exe"):"; fi
+  done
+  PATH="$rt_dirs$PATH"
+  export PATH
+}
+
+print_tools() {
+  for pt_name in node bun supabase; do
+    eval "pt_exe=\$TOOL_$pt_name"
+    if [ -n "$pt_exe" ]; then
+      note "$(printf '%-9s %s  %s' "$pt_name" "$(tool_version "$pt_exe")" "$pt_exe")"
+    else
+      note "$(printf '%-9s %s' "$pt_name" 'not installed')"
+    fi
+  done
+}
+
+# -------------------------------------------------------------------------------------------------
+# Docker
+# -------------------------------------------------------------------------------------------------
+# Prints running, missing, stopped, no-permission or unsupported.
+docker_state() {
+  have docker || { echo missing; return 0; }
+  if ds_os=$(docker version --format '{{.Server.Os}}' 2>/dev/null) && [ -n "$ds_os" ]; then
+    if [ "$ds_os" = linux ]; then echo running; else echo unsupported; fi
+    return 0
+  fi
+  if docker version 2>&1 | grep -qi 'permission denied'; then echo no-permission; else echo stopped; fi
+}
+
+require_docker() {
+  case "$(docker_state)" in
+    running) ;;
+    missing)
+      echo
+      if [ "$OS" = macos ]; then
+        warn 'Docker Desktop is required and was not found.'
+        note 'Install the build for your Mac (Apple silicon or Intel), then open it once:'
+        note '  https://docs.docker.com/desktop/setup/install/mac-install/'
+        note '  or, with Homebrew: brew install --cask docker'
+        note 'Wait until Docker Desktop reports "Engine running", then run this command again.'
+      else
+        warn 'Docker Engine is required and was not found.'
+        note 'Install Docker Engine and the compose plugin from Docker'"'"'s apt repository:'
+        note '  https://docs.docker.com/engine/install/ubuntu/   (Debian: .../engine/install/debian/)'
+        note '  packages: docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin'
+        note 'Then let your account use it without sudo, and sign out and back in:'
+        # shellcheck disable=SC2016 # printed for the user to run
+        note '  sudo usermod -aG docker "$USER"'
+        note 'This launcher never installs system packages itself.'
+      fi
+      exit 1
+      ;;
+    no-permission)
+      fail "Docker is installed but this account cannot reach it (permission denied on the Docker socket).
+    Add yourself to the docker group, then sign out and back in (or run: newgrp docker):
+      sudo usermod -aG docker \"\$USER\"
+    Membership of the docker group is equivalent to root on this machine; see
+    https://docs.docker.com/engine/install/linux-postinstall/"
+      ;;
+    unsupported) fail 'Docker is not running Linux containers.' ;;
+    *)
+      if [ "$OS" = macos ]; then
+        fail 'Docker Desktop is installed but its engine is not running. Open Docker Desktop, wait for "Engine running", and retry.'
+      else
+        fail 'Docker is installed but the daemon is not running. Start it (sudo systemctl start docker) and retry.'
+      fi
+      ;;
+  esac
+}
+
+# Docker Desktop (macOS, and Linux when used there) publishes container ports through its own port
+# exposer; its "Port binding behavior" setting decides whether ports that do not name an address
+# are reachable from the network. Prints the setting, or nothing when it is not recorded.
+docker_desktop_binding() {
+  for db_store in "$HOME/Library/Group Containers/group.com.docker/settings-store.json" \
+    "$HOME/.docker/desktop/settings-store.json"; do
+    if [ -f "$db_store" ]; then
+      sed -n 's/.*"PortBindingBehavior" *: *"\([^"]*\)".*/\1/p' "$db_store" | head -n 1
+      return 0
+    fi
+  done
+}
+
+binding_is_local() {
+  case "$1" in default-local-port-binding | local-only-port-binding) return 0 ;; *) return 1 ;; esac
+}
+
+require_local_binding() {
+  rl_binding=$(docker_desktop_binding)
+  if [ -n "$rl_binding" ] && ! binding_is_local "$rl_binding"; then
+    echo
+    warn 'Docker Desktop must publish container ports on localhost only, so the local database and'
+    warn 'backend are not reachable from your network. It is not set up that way yet.'
+    note 'Docker Desktop > Settings > Resources > Network > Port binding behavior:'
+    note '  choose "Localhost by default", then "Apply & restart".'
+    note 'This applies to every container that does not name an address. Restarting Docker Desktop'
+    note 'stops running containers; ones with a restart policy come back.'
+    exit 1
+  fi
+}
+
+# Connects to each port on this machine's own non-loopback addresses and prints every address and
+# port that answers. self-host.mjs checks what Docker reports; this checks what the network sees.
+exposed_ports() {
+  # shellcheck disable=SC2016 # JavaScript template literals, not shell expansions
+  node -e '
+    const net = require("node:net"), os = require("node:os");
+    const ports = process.argv.slice(1).map(Number);
+    const hosts = Object.values(os.networkInterfaces()).flat()
+      .filter((a) => a && !a.internal && !(a.family === "IPv6" && a.address.startsWith("fe80")))
+      .map((a) => a.address);
+    const probe = (host, port) => new Promise((done) => {
+      const s = net.connect({ host, port });
+      const end = (open) => { s.destroy(); done(open ? `${host.includes(":") ? `[${host}]` : host}:${port}` : null); };
+      s.setTimeout(1500, () => end(false));
+      s.once("connect", () => end(true));
+      s.once("error", () => end(false));
+    });
+    Promise.all(hosts.flatMap((h) => ports.map((p) => probe(h, p))))
+      .then((r) => { for (const x of r.filter(Boolean)) console.log(x); });
+  ' "$@"
+}
+
+require_not_exposed() {
+  if ! rn_open=$(exposed_ports "$APP_PORT" "$API_PORT" "$((API_PORT + 1))" "$((API_PORT + 3))" "$((API_PORT + 4))"); then
+    rn_open='(the check itself failed, so exposure could not be ruled out)'
+  fi
+  [ -z "$rn_open" ] && return 0
+  echo
+  warn 'These Meridian ports answer on a network address, not only on localhost:'
+  printf '%s\n' "$rn_open" | while IFS= read -r rn_line; do note "$rn_line"; done
+  if [ "$OS" = macos ] || [ -n "$(docker_desktop_binding)" ]; then
+    note 'Set Docker Desktop > Settings > Resources > Network > Port binding behavior to'
+    note "\"Localhost by default\", Apply & restart, then run $MERIDIAN_CMD start again."
+  else
+    note 'Check the Docker daemon "ip" setting (/etc/docker/daemon.json) and any proxy in front of it.'
+  fi
+  stop_app >/dev/null || true
+  node "$SELF_HOST" stop >/dev/null 2>&1 || true
+  fail 'Stopped the backend so it is not reachable from the network.'
+}
+
+# Prints every port in use: local listeners (IPv4 loopback and wildcard) and Docker-published
+# ports. Local listeners are found by trying to bind, which needs no extra tools on either OS.
+busy_ports() {
+  bp_local=$(node -e '
+    const net = require("node:net");
+    const ports = process.argv.slice(1).map(Number);
+    const tryBind = (port, host) => new Promise((done) => {
+      const s = net.createServer();
+      s.once("error", () => done(false));
+      s.listen({ port, host, exclusive: true }, () => s.close(() => done(true)));
+    });
+    (async () => {
+      for (const p of ports)
+        if (!(await tryBind(p, "127.0.0.1")) || !(await tryBind(p, "0.0.0.0"))) console.log(p);
+    })();
+  ' "$@") || return 1
+  if [ -n "$bp_local" ]; then printf '%s\n' "$bp_local"; fi
+  docker ps --format '{{.Ports}}' 2>/dev/null | tr ',' '\n' | sed -n 's/.*:\([0-9][0-9]*\)->.*/\1/p'
+}
+
+# -------------------------------------------------------------------------------------------------
+# Installation and app process
+# -------------------------------------------------------------------------------------------------
+manifest_value() {
+  sed -n "s/.*\"$1\": *\"\{0,1\}\([^\",]*\)\"\{0,1\}.*/\1/p" "$MANIFEST" | head -n 1
+}
+
+load_installation() {
+  [ -f "$MANIFEST" ] || return 1
+  INSTALL_ID=$(manifest_value id)
+  APP_PORT=$(manifest_value port)
+  API_PORT=$(manifest_value apiPort)
+  [ -n "$INSTALL_ID" ] && [ -n "$APP_PORT" ] && [ -n "$API_PORT" ]
+}
+
+# Prints the PID recorded in app.pid when it is still our self-host.mjs process (PIDs are reused).
+app_pid() {
+  [ -f "$PID_FILE" ] || return 1
+  ap_pid=$(tr -cd '0-9' <"$PID_FILE")
+  if [ -n "$ap_pid" ] && ap_cmd=$(ps -p "$ap_pid" -o command= 2>/dev/null); then
+    case "$ap_cmd" in
+      *self-host.mjs*start*) printf '%s\n' "$ap_pid"; return 0 ;;
+    esac
+  fi
+  rm -f "$PID_FILE"
+  return 1
+}
+
+alive() { kill -0 "$1" 2>/dev/null; }
+
+stop_app() {
+  sa_pid=$(app_pid) || return 1
+  # self-host.mjs forwards SIGTERM to the web server it spawned and exits when it does.
+  sa_children=$(pgrep -P "$sa_pid" 2>/dev/null || true)
+  kill -TERM "$sa_pid" 2>/dev/null || true
+  sa_wait=0
+  while alive "$sa_pid" && [ "$sa_wait" -lt 15 ]; do sleep 1; sa_wait=$((sa_wait + 1)); done
+  # shellcheck disable=SC2086 # one PID per word
+  for sa_proc in "$sa_pid" $sa_children; do
+    if alive "$sa_proc"; then kill -KILL "$sa_proc" 2>/dev/null || true; fi
+  done
+  rm -f "$PID_FILE"
+  return 0
+}
+
+app_http_ok() {
+  if have curl; then
+    curl -fsS -o /dev/null --max-time 5 "http://localhost:$1/auth" 2>/dev/null
+  else
+    node -e 'fetch(process.argv[1], { signal: AbortSignal.timeout(5000) }).then((r) => process.exit(r.status === 200 ? 0 : 1), () => process.exit(1))' "http://localhost:$1/auth"
+  fi
+}
+
+open_browser() {
+  if [ "$OS" = macos ]; then
+    open "$1" >/dev/null 2>&1 && return 0
+  elif grep -qi microsoft /proc/version 2>/dev/null; then
+    # WSL: hand the URL to the Windows default browser.
+    if have wslview; then wslview "$1" >/dev/null 2>&1 && return 0; fi
+    if have explorer.exe; then explorer.exe "$1" >/dev/null 2>&1; return 0; fi
+  elif have xdg-open && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+    xdg-open "$1" >/dev/null 2>&1 &
+    return 0
+  fi
+  note "Open $1 in your browser."
+}
+
+remove_tree() {
+  case "$1" in
+    "$ROOT"/?*) rm -rf -- "$1" 2>/dev/null || true ;;
+    "$TOOLS_DIR") rm -rf -- "$1" 2>/dev/null || true ;;
+    *) fail "Refusing to remove unexpected path $1." ;;
+  esac
+}
+
+show_help() {
+  cat <<EOF
+Meridian Community launcher (local preview installation)
+
+Usage: $MERIDIAN_CMD <command> [options]
+
+  install [--port 8080] [--backend-port 58321]
+                   Check Docker, get Node/Bun/Supabase CLI, create the local backend, build the app.
+                   Safe to re-run; it resumes with the same installation and ports.
+  start [--no-browser] [--timeout 300]
+                   Start the backend and the web app in the background, then open it.
+  stop             Stop the web app and the backend. Data is kept.
+  status           Show tools, Docker, the installation and app health.
+  logs             Show the end of the web app log.
+  uninstall [--force] [--remove-tools]
+                   Stop everything and permanently delete this installation's database,
+                   storage and generated files. Back up first if you need the data.
+  doctor           Check prerequisites without downloading anything.
+  tools            Download and verify the pinned Node.js, Bun and Supabase CLI only.
+  upgrade          Apply a new version: database migrations and a rebuild (stop the app first).
+
+  bootstrap-admin <verified-email>, backup, restore <dir>, check
+                   Passed through to scripts/self-host.mjs (stop the app before backup and
+                   restore).
+EOF
+}
+
+# -------------------------------------------------------------------------------------------------
+# Arguments
+# -------------------------------------------------------------------------------------------------
+COMMAND=${1:-help}
+[ "$#" -gt 0 ] && shift
+OPT_PORT=''
+OPT_BACKEND_PORT=''
+OPT_NO_BROWSER=0
+OPT_FORCE=0
+OPT_REMOVE_TOOLS=0
+OPT_TIMEOUT=300
+PASSTHROUGH=''
+quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --port) [ "$#" -ge 2 ] || fail '--port needs a value.'; OPT_PORT=$2; shift ;;
+    --port=*) OPT_PORT=${1#*=} ;;
+    --backend-port) [ "$#" -ge 2 ] || fail '--backend-port needs a value.'; OPT_BACKEND_PORT=$2; shift ;;
+    --backend-port=*) OPT_BACKEND_PORT=${1#*=} ;;
+    --timeout) [ "$#" -ge 2 ] || fail '--timeout needs a value.'; OPT_TIMEOUT=$2; shift ;;
+    --timeout=*) OPT_TIMEOUT=${1#*=} ;;
+    --no-browser) OPT_NO_BROWSER=1 ;;
+    --force) OPT_FORCE=1 ;;
+    --remove-tools) OPT_REMOVE_TOOLS=1 ;;
+    *) PASSTHROUGH="$PASSTHROUGH $(quote "$1")" ;;
+  esac
+  shift
+done
+for opt_value in "$OPT_PORT" "$OPT_BACKEND_PORT" "$OPT_TIMEOUT"; do
+  case "$opt_value" in *[!0-9]*) fail "Expected a number, got '$opt_value'." ;; esac
+done
+eval "set -- $PASSTHROUGH"
+
+# -------------------------------------------------------------------------------------------------
+case "$COMMAND" in
+  help | -h | --help)
+    show_help
+    ;;
+
+  tools)
+    detect_platform
+    step 'Locating Node.js, Bun and the Supabase CLI'
+    resolve_toolchain 1
+    print_tools
+    ;;
+
+  doctor)
+    detect_platform
+    if [ "$OS" = macos ]; then
+      step "macOS $(sw_vers -productVersion 2>/dev/null || uname -r) ($ARCH)"
+    else
+      # shellcheck disable=SC1091 # provided by the distribution
+      step "$( (. /etc/os-release 2>/dev/null && printf '%s' "${PRETTY_NAME:-Linux}") || echo Linux) ($ARCH)"
+    fi
+    resolve_toolchain 0
+    for dr_name in node bun supabase; do
+      eval "dr_exe=\$TOOL_$dr_name"
+      if [ -z "$dr_exe" ]; then
+        note "$(printf '%-9s not found; install will download %s %s' "$dr_name" "$dr_name" "$(tool_pinned_version "$dr_name")")"
+      else
+        note "$(printf '%-9s %s  %s' "$dr_name" "$(tool_version "$dr_exe")" "$dr_exe")"
+      fi
+    done
+    note "$(printf '%-9s %s' docker "$(docker_state)")"
+    if [ "$OS" = linux ]; then
+      if docker compose version >/dev/null 2>&1; then dr_compose=present; else dr_compose='missing (only needed for connector agents in deploy/connect)'; fi
+      note "$(printf '%-9s %s' compose "$dr_compose")"
+    fi
+    dr_binding=$(docker_desktop_binding)
+    if [ -z "$dr_binding" ]; then
+      dr_binding='not a Docker Desktop setting here; checked on the network after install and start'
+    elif binding_is_local "$dr_binding"; then
+      dr_binding="$dr_binding (ok)"
+    else
+      dr_binding="$dr_binding: open to the network; install will explain the Docker Desktop setting"
+    fi
+    note "$(printf '%-9s %s' ports "$dr_binding")"
+    note "$(printf '%-9s %s' tools "$TOOLS_DIR")"
+    ;;
+
+  install)
+    detect_platform
+    step 'Checking Docker'
+    require_docker
+    require_local_binding
+    if [ "$OS" = linux ] && ! docker compose version >/dev/null 2>&1; then
+      note 'docker compose plugin not found; Meridian does not need it, connector agents in deploy/connect do.'
+    fi
+    step 'Locating Node.js, Bun and the Supabase CLI'
+    resolve_toolchain 1
+    print_tools
+    if [ -n "$OPT_PORT" ]; then MERIDIAN_PORT=$OPT_PORT; export MERIDIAN_PORT; fi
+    if [ -n "$OPT_BACKEND_PORT" ]; then MERIDIAN_BACKEND_PORT=$OPT_BACKEND_PORT; export MERIDIAN_BACKEND_PORT; fi
+    if ! load_installation; then
+      # A resumed install owns its ports already; a new one must not collide with another local
+      # backend or app.
+      APP_PORT=${OPT_PORT:-8080}
+      API_PORT=${OPT_BACKEND_PORT:-58321}
+      in_used=$(busy_ports "$APP_PORT" "$API_PORT" "$((API_PORT + 1))" "$((API_PORT + 2))" "$((API_PORT + 3))" "$((API_PORT + 4))") ||
+        fail 'Could not check whether the ports are free.'
+      in_busy=$(printf '%s\n' "$in_used" | sed '/^$/d' |
+        while IFS= read -r in_port; do
+          if [ "$in_port" = "$APP_PORT" ] || { [ "$in_port" -ge "$API_PORT" ] && [ "$in_port" -le "$((API_PORT + 4))" ]; }; then
+            echo "$in_port"
+          fi
+        done | sort -un | tr '\n' ' ')
+      if [ -n "$in_busy" ]; then
+        fail "Port(s) ${in_busy% } are already in use. Choose free ones, for example:
+  $MERIDIAN_CMD install --port 8090 --backend-port 59421   (backend uses backend-port to backend-port+4)"
+      fi
+    fi
+    step 'Installing (first run downloads backend images and dependencies; this can take 10+ minutes)'
+    if ! node "$SELF_HOST" install; then
+      note "If the error says ports are not loopback-only, fix Docker's port binding (see $MERIDIAN_CMD doctor),"
+      note "then run $MERIDIAN_CMD uninstall --force and install again."
+      fail 'Install did not finish. Fix the reported problem and run install again; state is preserved in .meridian/.'
+    fi
+    load_installation || fail 'Install did not record .meridian/installation.json.'
+    step 'Checking that the backend is reachable from localhost only'
+    require_not_exposed
+    echo
+    ok "Installed. Next: $MERIDIAN_CMD start"
+    ;;
+
+  start)
+    detect_platform
+    load_installation || fail "Not installed yet. Run: $MERIDIAN_CMD install"
+    if st_pid=$(app_pid); then note "Already running: http://localhost:$APP_PORT (pid $st_pid)"; exit 0; fi
+    if [ -f "$UPGRADE_MARKER" ]; then fail "This version has not been applied yet. Run: $MERIDIAN_CMD upgrade"; fi
+    require_docker
+    resolve_toolchain 0
+    [ -n "$TOOL_node" ] || fail "Node.js is missing. Run: $MERIDIAN_CMD install"
+    [ -f "$ROOT/.output/server/index.mjs" ] || fail "The app is not built. Run: $MERIDIAN_CMD install"
+    mkdir -p "$LOG_DIR"
+    st_out="$LOG_DIR/app.log"
+    st_err="$LOG_DIR/app.err.log"
+    step 'Starting backend and web app'
+    rm -f "$PID_FILE"
+    # The child records its own PID and then becomes self-host.mjs, so the PID file is exact even
+    # when setsid forks. setsid (Linux) and nohup detach it from this terminal.
+    st_detach=''
+    if have setsid; then st_detach=setsid; fi
+    (
+      cd "$ROOT"
+      # shellcheck disable=SC2016,SC2086 # $$ is the inner shell's; st_detach is empty or one word
+      exec $st_detach nohup sh -c 'echo $$ >"$1"; shift; exec "$@"' sh "$PID_FILE" \
+        "$TOOL_node" "$SELF_HOST" start >"$st_out" 2>"$st_err" </dev/null
+    ) &
+    st_deadline=$(($(date +%s) + OPT_TIMEOUT))
+    st_seen=0
+    while [ "$(date +%s)" -lt "$st_deadline" ]; do
+      if st_pid=$(app_pid); then
+        st_seen=1
+      elif [ "$st_seen" = 1 ] || [ "$(($(date +%s) + OPT_TIMEOUT - st_deadline))" -gt 10 ]; then
+        tail -n 20 "$st_err" "$st_out" 2>/dev/null || true
+        fail "The app exited during startup (logs: $LOG_DIR)."
+      fi
+      if [ "$st_seen" = 1 ] && app_http_ok "$APP_PORT"; then break; fi
+      sleep 2
+    done
+    app_http_ok "$APP_PORT" || fail "The app did not answer within $OPT_TIMEOUT s; see $MERIDIAN_CMD logs. It is still starting in the background."
+    require_not_exposed
+    st_url="http://localhost:$APP_PORT"
+    echo
+    ok "Meridian is running: $st_url"
+    note "Verification mail (Mailpit): http://localhost:$((API_PORT + 3))"
+    note 'Sign up, confirm the email in Mailpit, then make that account the platform administrator:'
+    note "  $MERIDIAN_CMD bootstrap-admin you@example.com"
+    note "Stop with: $MERIDIAN_CMD stop"
+    if [ "$OPT_NO_BROWSER" = 0 ]; then open_browser "$st_url"; fi
+    ;;
+
+  stop)
+    detect_platform
+    load_installation || fail 'Not installed.'
+    if stop_app; then step 'Web app stopped'; else note 'Web app was not running.'; fi
+    if [ "$(docker_state)" != running ]; then note 'Docker is not running; backend containers are already stopped.'; exit 0; fi
+    resolve_toolchain 0
+    if [ -z "$TOOL_node" ] || [ -z "$TOOL_supabase" ]; then
+      fail "Node.js or the Supabase CLI is missing. Run: $MERIDIAN_CMD install"
+    fi
+    step 'Stopping backend (data is kept)'
+    node "$SELF_HOST" stop
+    ;;
+
+  status)
+    detect_platform
+    resolve_toolchain 0
+    step 'Tools'
+    print_tools
+    note "$(printf '%-9s %s' docker "$(docker_state)")"
+    if ! load_installation; then step "Not installed (run $MERIDIAN_CMD install)"; exit 0; fi
+    step "Installation $INSTALL_ID"
+    note "folder    $ROOT"
+    note "app       http://localhost:$APP_PORT"
+    note "backend   http://127.0.0.1:$API_PORT"
+    if ss_pid=$(app_pid); then
+      note "process   running (pid $ss_pid)"
+      step 'Health'
+      node "$SELF_HOST" check
+    else
+      note 'process   stopped'
+    fi
+    ;;
+
+  logs)
+    for lg_file in "$LOG_DIR/app.log" "$LOG_DIR/app.err.log"; do
+      if [ -f "$lg_file" ]; then step "$lg_file"; tail -n 40 "$lg_file"; fi
+    done
+    ;;
+
+  uninstall)
+    detect_platform
+    if ! load_installation; then
+      note 'No installation found in this folder.'
+    else
+      warn "This permanently deletes installation $INSTALL_ID: its database, stored files,"
+      warn "accounts, generated keys and build output. Run $MERIDIAN_CMD backup first to keep data."
+      if [ "$OPT_FORCE" = 0 ]; then
+        [ -t 0 ] || fail 'Not a terminal; re-run with --force to confirm.'
+        printf 'Type the installation id (%s) to confirm: ' "$INSTALL_ID"
+        read -r un_answer || un_answer=''
+        if [ "$un_answer" != "$INSTALL_ID" ]; then note 'Cancelled; nothing was deleted.'; exit 1; fi
+      fi
+      if stop_app; then step 'Web app stopped'; fi
+      if [ "$(docker_state)" = running ]; then
+        resolve_toolchain 0
+        if [ -n "$TOOL_supabase" ]; then
+          step 'Removing backend containers and data volumes'
+          supabase stop --no-backup --workdir "$STATE" || true
+        fi
+        # Remove anything left with this installation's label (for example if the CLI is missing).
+        un_ids=$(docker ps -aq --filter "label=com.supabase.cli.project=$INSTALL_ID")
+        # shellcheck disable=SC2086 # one ID per word
+        if [ -n "$un_ids" ]; then docker rm -f $un_ids >/dev/null; fi
+        un_volumes=$(docker volume ls -q --filter "label=com.supabase.cli.project=$INSTALL_ID")
+        # shellcheck disable=SC2086 # one volume name per word
+        if [ -n "$un_volumes" ]; then docker volume rm $un_volumes >/dev/null; fi
+        docker network rm "${INSTALL_ID}_local" >/dev/null 2>&1 || true
+      else
+        warn 'Docker is not running, so backend containers and volumes were not removed.'
+        note "Start Docker and run uninstall again, or remove resources labelled com.supabase.cli.project=$INSTALL_ID."
+        exit 1
+      fi
+    fi
+    step 'Removing generated files'
+    un_left=''
+    for un_path in .meridian .output node_modules; do
+      if [ -e "$ROOT/$un_path" ]; then remove_tree "$ROOT/$un_path"; fi
+      if [ -e "$ROOT/$un_path" ]; then un_left="$un_left
+$ROOT/$un_path"; fi
+    done
+    if [ "$OPT_REMOVE_TOOLS" = 1 ] && [ -d "$TOOLS_DIR" ]; then
+      step "Removing downloaded tools ($TOOLS_DIR)"
+      remove_tree "$TOOLS_DIR"
+      if [ -e "$TOOLS_DIR" ]; then un_left="$un_left
+$TOOLS_DIR"; fi
+    fi
+    if [ -n "$un_left" ]; then
+      warn 'Backend data was removed, but these paths could not be deleted (check their permissions):'
+      printf '%s\n' "$un_left" | sed '/^$/d; s/^/    /'
+      exit 1
+    fi
+    ok "Uninstalled. You can now delete the folder $ROOT."
+    ;;
+
+  upgrade)
+    detect_platform
+    load_installation || fail "Not installed yet. Run: $MERIDIAN_CMD install"
+    if app_pid >/dev/null; then fail "Stop the app first. Run: $MERIDIAN_CMD stop"; fi
+    require_docker
+    resolve_toolchain 1
+    step 'Starting the backend, applying migrations and rebuilding'
+    node "$SELF_HOST" upgrade || fail 'Upgrade did not finish; see the error above. The marker is kept, so start stays blocked.'
+    rm -f "$UPGRADE_MARKER"
+    ok "Upgraded. Next: $MERIDIAN_CMD start"
+    ;;
+
+  *)
+    detect_platform
+    load_installation || fail "Not installed yet. Run: $MERIDIAN_CMD install"
+    resolve_toolchain 0
+    [ -n "$TOOL_node" ] || fail "Node.js is missing. Run: $MERIDIAN_CMD install"
+    exec node "$SELF_HOST" "$COMMAND" "$@"
+    ;;
+esac

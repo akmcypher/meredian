@@ -1,3 +1,58 @@
+# Meridian Community Preview 0.2
+
+Preview 0.2 is pre-release software for evaluation and feedback. It is not production-certified.
+Everything below was demonstrated on local stacks (Windows, Docker Desktop); none of it is hosted
+or certified yet.
+
+## What is new
+
+- **Parallel runs (Connect tasks):** each stream of a run is a leased task, so several agents work
+  on one run at once. Tasks are fenced and retried on their own; agents from 0.1 keep working.
+- **Kafka at scale:** one task per partition with a stream-wide commit sequence, per-partition lag
+  in the stream view, and backpressure with bounded runs. See [Kafka](KAFKA.md).
+- **Secured and managed Kafka:** SASL/SCRAM and SASL/PLAIN over TLS, mutual TLS, and profiles for
+  Confluent Cloud, Azure Event Hubs, Amazon MSK (SCRAM and IAM), Redpanda Cloud and Aiven.
+- **Object-store files:** a `files-v1` connector reads CSV, TSV, JSON Lines and Parquet under a
+  prefix of an S3-compatible bucket (AWS S3, GCS interoperability, MinIO, R2). Credentials stay on
+  the agent host.
+- **Spark for ingestion:** `spark-postgres-v1`, `spark-mysql-v1`, `spark-files-v1` and
+  `spark-kafka-v1` run loads on a Spark cluster. Executors write Bronze parts straight to storage
+  through short-lived signed URLs; the control plane verifies every part before a fenced commit, so
+  Bronze readers see ordinary landing batches.
+  - PostgreSQL and MySQL: full refresh in hash partitions of the key (PostgreSQL in one exported
+    snapshot) and incremental streams in a fixed (cursor, key) window.
+  - Files: record-aligned byte ranges (CSV/TSV/JSONL) and row-group ranges (Parquet); a file
+    replaced during a run fails it as `source_changed`.
+  - Kafka: offset chunks per partition with the actor's identity, position and gap checks.
+  - Every Spark run is tested against the single-worker actor for the same rows and positions, and
+    for resuming a failed attempt without loss or duplicates. A local cluster is in
+    `deploy/connect/spark/`.
+- **Installers:** launchers and packages for macOS and Linux next to the Windows installer.
+
+## Known limitations
+
+- PostgreSQL and MySQL actors are incremental cursor extractors, not CDC: deletes and updates that
+  do not advance the cursor are not captured.
+- Spark runs: Spark RPC authentication and encryption are not configured (database credentials and
+  the run's lease token reach executors over Spark RPC inside the cluster), Kubernetes is not
+  supported yet, PKCS#12 Kafka keystores are refused (use PEM files), and Bronze parts are NDJSON.
+- Files: full refresh only, at most 4,096 ranges per run; no Avro files and no ADLS yet. CSV with
+  quoted newlines is read one range per file.
+- Managed Kafka profiles are checked offline and against a local secured broker, not against the
+  hosted services.
+- Raw upsert/delete envelopes are retained as-is; no warehouse merge is applied.
+- REST/Push batches and native uploads are not exposed through the Bronze reader.
+- Storage reconciliation is report-only; destructive cleanup is disabled.
+- Team invitations are not available yet.
+- Container images and release archives are not signed.
+
+## Upgrading from Preview 0.1
+
+Apply migrations 0094 to 0097 in order, with the updated application. They add leased tasks per
+stream (0094), Kafka partition tasks (0095), partition lag (0096) and a claim fix for tasks whose
+stream already completed (0097). Runs already queued keep working; agents from 0.1 use the
+run-level lease until they are updated.
+
 # Meridian Community Preview 0.1
 
 Preview 0.1 is pre-release software for evaluation and feedback. It is not production-certified.

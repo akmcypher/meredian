@@ -179,6 +179,8 @@ describe.skipIf(!url || !service || !key || !brokers)(
           .select("detail")
           .eq("run_id", runId)
           .not("detail", "is", null)
+          // Partition planning (task_split) is not a gap event.
+          .neq("code", "task_split")
       ).data.map((e: { detail: unknown }) => e.detail);
 
     it("fails closed below retention and resumes only for the exact gap the owner approved", async () => {

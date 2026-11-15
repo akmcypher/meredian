@@ -12,6 +12,10 @@ On Windows 11 (x64 or ARM64), use the release zip instead: with Docker Desktop r
 `.\meridian.cmd install` and `.\meridian.cmd start` in the extracted folder. It wraps
 `scripts/self-host.mjs` and adds `status`, `stop` and `uninstall`; see
 [the Windows installer](docs/LOCAL_DEV.md#windows-installer-community-preview).
+On macOS and Ubuntu/Debian, use `meridian-<version>-macos.tar.gz` or
+`meridian-<version>-linux.tar.gz` the same way: with Docker running, `./meridian install` and
+`./meridian start`; see
+[the macOS and Linux installer](docs/LOCAL_DEV.md#macos-and-linux-installer-community-preview).
 Never run install or reset commands against an existing database you want to keep.
 
 Each account that signs up becomes the owner of its own workspace, not a platform administrator.
