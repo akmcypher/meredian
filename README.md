@@ -13,9 +13,9 @@ The current name is used for development, community collaboration, and preview d
 It does not imply affiliation with, endorsement by, or sponsorship from any other organization
 using a similar name.
 
-## Meridian Community Preview 0.1 — Disclaimer
+## Meridian Community Preview — Disclaimer
 
-Meridian Community Preview 0.1 is pre-release software provided for evaluation, development, testing and community feedback.
+Meridian Community Preview 0.2 is pre-release software provided for evaluation, development, testing and community feedback.
 
 **Not production-certified:** Passing automated tests and CI checks does not constitute production certification, independent security certification, performance benchmarking or a guarantee of reliability or availability.
 
@@ -33,10 +33,13 @@ Users are responsible for evaluating the software, securing their deployment, co
 
 ## What it does
 
+The full list is in [docs/FEATURES.md](docs/FEATURES.md).
+
 - **Sources:** manual REST API pulls, a Push API endpoint, native file upload (CSV, TSV,
   Parquet, Avro, JSON, JSONL and NDJSON), and connector
-  actors for PostgreSQL, MySQL and Kafka built on the Connect SDK, with a conformance kit for
-  writing your own. The PostgreSQL and MySQL actors are incremental table extractors (cursor
+  actors for PostgreSQL, MySQL, Kafka and S3-compatible object-store files built on the Connect
+  SDK, with a conformance kit for writing your own. Spark versions of the PostgreSQL, MySQL,
+  files and Kafka connectors read in parallel across a Spark cluster. The PostgreSQL and MySQL actors are incremental table extractors (cursor
   plus primary key), not change data capture: deletes, and updates that do not advance the
   cursor, are not captured.
 - **Large inputs:** the partition-worker path splits records and retries partitioned runs before
