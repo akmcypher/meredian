@@ -44,7 +44,8 @@ or certified yet.
 - REST/Push batches and native uploads are not exposed through the Bronze reader.
 - Storage reconciliation is report-only; destructive cleanup is disabled.
 - Team invitations are not available yet.
-- Container images and release archives are not signed.
+- Container images are not signed. Release archives are signed with Sigstore and carry SLSA
+  build provenance.
 
 ## Upgrading from Preview 0.1
 
