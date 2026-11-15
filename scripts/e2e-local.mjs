@@ -18,7 +18,11 @@ const python = pythonExecutable();
 const pythonEnv = { ...process.env, ...pg, PYTHONPATH: "deploy/connect" };
 
 // connect-live and pipeline-chain read source rows from an isolated fixture database; reset it.
-const seeded = ["connect-live.e2e.test.ts", "pipeline-chain.e2e.test.ts"];
+const seeded = [
+  "connect-live.e2e.test.ts",
+  "pipeline-chain.e2e.test.ts",
+  "connect-spark.e2e.test.ts",
+];
 if (
   filters.some((f) => seeded.some((file) => file.includes(f) || f.includes(file.split(".")[0])))
 ) {

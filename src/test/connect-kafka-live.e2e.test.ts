@@ -370,6 +370,21 @@ describe.skipIf(!url || !service || !key || !brokers || !registry)(
       expect(
         (await peer.from("connect_dead_letters").select("id").eq("stream_id", stream)).data,
       ).toEqual([]);
+      // Lag (K2): the owner sees every partition caught up to its end offset; the peer sees nothing.
+      const lag = (
+        await owner
+          .from("connect_partition_lag")
+          .select("partition,position,end_offset,lag")
+          .eq("stream_id", stream)
+      ).data as { position: number; end_offset: number; lag: number }[];
+      expect(lag.length).toBeGreaterThan(1);
+      expect(lag.reduce((n, l) => n + Number(l.position), 0)).toBe(1202);
+      expect(
+        lag.every((l) => Number(l.lag) === 0 && Number(l.end_offset) === Number(l.position)),
+      ).toBe(true);
+      expect(
+        (await peer.from("connect_partition_lag").select("partition").eq("stream_id", stream)).data,
+      ).toEqual([]);
     });
     it("replays a dead letter once the registry has its schema, without moving the stream", async () => {
       expect(await registerAvro()).toBe(avroId);
