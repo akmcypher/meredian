@@ -64,6 +64,12 @@ Docker Desktop, and run `.\meridian.cmd install` then `.\meridian.cmd start` in 
 The launcher fetches pinned, hash-verified Node, Bun and Supabase CLI builds if they are missing; see
 [Windows installer](docs/LOCAL_DEV.md#windows-installer-community-preview).
 
+On macOS (Apple silicon or Intel) or Ubuntu/Debian (x64 or ARM64), download
+`meridian-<version>-macos.tar.gz` or `meridian-<version>-linux.tar.gz`, start Docker, and run
+`./meridian install` then `./meridian start` in the extracted folder. It does the same checks and
+pinned, hash-verified downloads; see
+[macOS and Linux installer](docs/LOCAL_DEV.md#macos-and-linux-installer-community-preview).
+
 Otherwise see [docs/LOCAL_DEV.md](docs/LOCAL_DEV.md). You need Bun, Docker and the Supabase CLI.
 
 ## Contributing and security

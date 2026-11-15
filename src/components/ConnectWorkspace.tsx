@@ -63,8 +63,8 @@ export function ConnectWorkspace() {
     enabled: !!selected,
     refetchInterval: 5000,
     queryFn: async () => {
-      const [s, c, e] = await Promise.all([
-        supabase.from("connect_streams").select("*").eq("connection_id", selected),
+      const s = await supabase.from("connect_streams").select("*").eq("connection_id", selected);
+      const [c, e, l] = await Promise.all([
         supabase
           .from("connect_commits")
           .select("*")
@@ -78,9 +78,18 @@ export function ConnectWorkspace() {
           .eq("connection_id", selected)
           .order("created_at", { ascending: false })
           .limit(50),
+        // Kafka lag per partition, as last observed by the agent.
+        supabase
+          .from("connect_partition_lag")
+          .select("stream_id,partition,lag,observed_at")
+          .in(
+            "stream_id",
+            (s.data ?? []).map((x) => x.id),
+          ),
       ]);
-      if (s.error || c.error || e.error) throw new Error("Connect run details unavailable");
-      return { streams: s.data, commits: c.data, events: e.data };
+      if (s.error || c.error || e.error || l.error)
+        throw new Error("Connect run details unavailable");
+      return { streams: s.data, commits: c.data, events: e.data, lag: l.data };
     },
   });
   const c = query.data?.connections.find((c) => c.id === selected);
@@ -289,6 +298,7 @@ export function ConnectWorkspace() {
                 {s.namespace}.{s.name}
               </strong>{" "}
               · {s.sync_mode} · {s.last_success_at ?? "No committed batch"}
+              <StreamLag rows={details.data.lag.filter((l) => l.stream_id === s.id)} />
               <details>
                 <summary>Durable checkpoint</summary>
                 <pre className="overflow-auto text-xs">{JSON.stringify(s.state, null, 2)}</pre>
@@ -389,5 +399,26 @@ export function ConnectWorkspace() {
         </>
       )}
     </section>
+  );
+}
+
+// Total and worst-partition lag (records behind the end offset) at the last agent observation.
+function StreamLag({
+  rows,
+}: {
+  rows: { partition: number; lag: number | null; observed_at: string }[];
+}) {
+  if (!rows.length) return null;
+  const total = rows.reduce((sum, r) => sum + Number(r.lag ?? 0), 0);
+  const worst = rows.reduce((a, b) => (Number(b.lag ?? 0) > Number(a.lag ?? 0) ? b : a));
+  const at = rows.reduce((a, b) => (b.observed_at > a.observed_at ? b : a)).observed_at;
+  return (
+    <span className="text-muted-foreground" title={`Observed ${new Date(at).toLocaleString()}`}>
+      {" "}
+      · Lag {total.toLocaleString()} across {rows.length} partition{rows.length === 1 ? "" : "s"}
+      {total > 0
+        ? ` (max ${Number(worst.lag).toLocaleString()} on partition ${worst.partition})`
+        : ""}
+    </span>
   );
 }

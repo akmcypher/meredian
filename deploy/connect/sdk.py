@@ -5,7 +5,7 @@ DEAD_LETTER_CODES = {'deserialization_failed','schema_not_found','schema_incompa
 def emit(kind, **payload):
     print(json.dumps({'type': kind, **payload}, separators=(',', ':'), default=str), flush=True)
 def arguments():
-    p=argparse.ArgumentParser(); p.add_argument('command',choices=['spec','check','discover','read','replay','write','health']); p.add_argument('--config'); p.add_argument('--catalog'); p.add_argument('--state'); return p.parse_args()
+    p=argparse.ArgumentParser(); p.add_argument('command',choices=['spec','check','discover','plan','read','replay','write','health']); p.add_argument('--config'); p.add_argument('--catalog'); p.add_argument('--state'); return p.parse_args()
 def load(path):
     if not path: return {}
     with open(path) as f: return json.load(f)
@@ -51,7 +51,7 @@ def dead_letter(stream, position, code, payload):
     if code not in DEAD_LETTER_CODES: raise ValueError('invalid_protocol')
     return {'type':'DEAD_LETTER','dead_letter':{'stream':stream['name'],'namespace':stream['namespace'],'position':str(position),'error_code':code,'payload':payload}}
 def validate(message):
-    if message.get('type') not in ['RECORD','STATE','DEAD_LETTER','SPEC','CONNECTION_STATUS','CATALOG','LOG','TRACE']: raise ValueError('invalid_protocol')
+    if message.get('type') not in ['RECORD','STATE','DEAD_LETTER','SPEC','CONNECTION_STATUS','CATALOG','PLAN','LOG','TRACE']: raise ValueError('invalid_protocol')
     if message['type']=='RECORD' and (not isinstance(message.get('record',{}).get('data'),dict) or not message['record'].get('stream')): raise ValueError('invalid_record')
     if message['type']=='RECORD' and message['record'].get('operation') not in (None,'upsert','delete'): raise ValueError('invalid_record')
     if message['type']=='DEAD_LETTER' and message.get('dead_letter',{}).get('error_code') not in DEAD_LETTER_CODES: raise ValueError('invalid_protocol')

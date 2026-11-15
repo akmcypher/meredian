@@ -2,3 +2,6 @@ psycopg[binary]==3.2.10
 PyMySQL[rsa]==1.1.1
 confluent-kafka==2.6.1
 fastavro==1.10.0
+aws-msk-iam-sasl-signer-python==1.0.2
+# Object-store files (source_files.py): S3 filesystem, Parquet.
+pyarrow==26.0.0

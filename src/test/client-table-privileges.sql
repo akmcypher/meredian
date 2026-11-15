@@ -3,6 +3,10 @@ BEGIN;
 DO $$ BEGIN
   -- File-table registration is server-verified; clients never insert registry rows directly.
   IF has_table_privilege('authenticated','public.file_tables','INSERT') THEN RAISE EXCEPTION 'Unexpected authenticated INSERT on file_tables'; END IF;
+  -- Run and task lease tokens are agent credentials; clients never read them.
+  IF has_column_privilege('authenticated','public.connect_runs','lease_token','SELECT') THEN RAISE EXCEPTION 'Client can read connect_runs.lease_token'; END IF;
+  IF has_column_privilege('authenticated','public.connect_run_streams','lease_token','SELECT') THEN RAISE EXCEPTION 'Client can read connect_run_streams.lease_token'; END IF;
+  IF has_column_privilege('anon','public.connect_run_streams','lease_token','SELECT') THEN RAISE EXCEPTION 'Anon can read connect_run_streams.lease_token'; END IF;
 END $$;
 CREATE TABLE public.meridian_acl_probe (id integer);
 CREATE TABLE core.meridian_acl_probe (id integer);
