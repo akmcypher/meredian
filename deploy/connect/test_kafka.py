@@ -220,7 +220,7 @@ class KafkaActor(KafkaCluster):
         stream=self.stream(topic)
         # Drive the actor in-process: the run's high watermark is taken before the first yield,
         # then more messages arrive while it is still reading.
-        gen=source_kafka.read(self.config,stream,{},batch_size=1)
+        gen=source_kafka.read({**self.config,'max_batch_records':1},stream,{})
         first=next(gen)
         self.produce(topic,[{'value':json.dumps({'id':100+i}).encode()} for i in range(20)])
         rest=list(gen)
@@ -261,6 +261,53 @@ def wire(schema_id, schema, value):
     out=io.BytesIO(); out.write(b'\x00'+struct.pack('>I',schema_id)); fastavro.schemaless_writer(out,fastavro.parse_schema(schema),value); return out.getvalue()
 V1={'type':'record','name':'Order','namespace':'certify','fields':[{'name':'id','type':'long'},{'name':'amount','type':{'type':'bytes','logicalType':'decimal','precision':12,'scale':2}}]}
 V2={**V1,'fields':V1['fields']+[{'name':'region','type':'string','default':'eu'}]}
+@unittest.skipUnless(reachable(),'Kafka certification cluster not running (deploy/connect/certify.compose.yml)')
+class Backpressure(KafkaCluster):
+    """Phase 3 K3: bounded checkpoints, prefetch and runs; pending records drains across runs exactly once."""
+    def test_checkpoints_are_bounded_by_payload_bytes(self):
+        topic=self.topic(1)
+        blob='x'*100_000
+        self.produce(topic,[{'value':json.dumps({'id':i,'pad':blob}).encode()} for i in range(30)])
+        stream=self.stream(topic)
+        ms,code=run_actor('read',{**self.config,'max_batch_bytes':300_000},stream,{})
+        self.assertEqual(code,0,ms[-1:])
+        # Records between consecutive checkpoints stay within the byte bound (+1 record).
+        between=[]; n=0
+        for m in ms:
+            if m['type']=='RECORD': n+=1
+            elif m['type']=='STATE': between.append(n); n=0
+        self.assertEqual(sum(between),30)
+        self.assertTrue(all(b<=4 for b in between),between)
+        self.assertGreaterEqual(len(between),8)
+    def test_a_backlog_drains_across_bounded_runs_without_loss_or_duplicates(self):
+        topic=self.topic(3)
+        self.produce(topic,[{'key':str(i).encode(),'value':json.dumps({'id':i}).encode()} for i in range(250)])
+        stream=self.stream(topic)
+        config={**self.config,'max_run_records':100,'max_batch_records':30}
+        seen=[]; state={}; limited=[]
+        for _ in range(5):
+            ms,code=run_actor('read',config,stream,state)
+            self.assertEqual(code,0,ms[-1:])
+            got=[r['data']['id'] for r in records(ms)]
+            self.assertLessEqual(len(got),100)
+            seen+=got; state=states(ms)[-1]
+            self.assertTrue(state['completed'])
+            limited.append(any(m['type']=='LOG' and m['log']['code']=='run_limit_reached' for m in ms))
+            if not got: break
+        self.assertEqual(sorted(seen),list(range(250)))
+        self.assertEqual(len(seen),len(set(seen)))
+        # The first two runs stopped at the limit; the one that finished the pending records did not.
+        self.assertEqual(limited[:2],[True,True])
+        self.assertFalse(limited[2])
+        self.assertEqual(sum(int(v) for v in state['positions'].values()),250)
+    def test_limits_cannot_be_switched_off(self):
+        topic=self.topic(1)
+        stream=self.stream(topic)
+        for bad in ({'max_batch_records':0},{'max_batch_bytes':10**10},{'max_run_seconds':0},{'max_run_records':-1},{'max_prefetch_kbytes':10**7},{'max_batch_records':'500'},{'max_run_records':True}):
+            with self.subTest(bad):
+                ms,code=run_actor('read',{**self.config,**bad},stream,{})
+                self.assertNotEqual(code,0)
+                self.assertEqual(ms[-1]['trace']['code'],'connector_failed')
 @unittest.skipUnless(reachable(),'Kafka certification cluster not running (deploy/connect/certify.compose.yml)')
 class AvroRegistry(KafkaCluster):
     config={'bootstrap_servers':BROKERS,'schema_registry_url':REGISTRY}

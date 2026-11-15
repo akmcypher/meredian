@@ -196,11 +196,15 @@ describe.skipIf(!url || !service || !key || !brokers)(
         const file = await db.storage.from("ingest-files").download(b.data.object_key);
         expect(file.data.size).toBeLessThan(LIMIT);
       }
-      // Segments before the final one carry the earlier checkpoint: the position moved only at
-      // the end (the actor emits one checkpoint for this run).
+      // The actor checkpoints every 4 MiB of payload (K3), and segments between checkpoints
+      // carry the earlier one: the position only moves forward, moves mid-run, and ends at 35.
       const last = commits[commits.length - 1];
       expect(last.checkpoint.positions).toEqual({ "0": "35" });
-      for (const c of commits.slice(0, -1)) expect(c.checkpoint.positions ?? {}).toEqual({});
+      const moved = commits.map((c: { checkpoint: { positions?: Record<string, string> } }) =>
+        Number(c.checkpoint.positions?.["0"] ?? 0),
+      );
+      expect(moved).toEqual([...moved].sort((a, b) => a - b));
+      expect(moved.some((p: number) => p > 0 && p < 35)).toBe(true);
       // All 32 records landed once; the three binary values are dead letters with every byte.
       const dead = (
         await db

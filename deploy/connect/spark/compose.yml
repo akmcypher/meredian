@@ -1,0 +1,30 @@
+# Spark standalone cluster for ingestion tests (S1). Local testing only: ports bind to 127.0.0.1.
+#   docker compose -p meridian-spark -f deploy/connect/spark/compose.yml up -d --build --wait
+# Two workers with one core each, so a run with several partitions always uses at least two
+# executors. deploy/connect is mounted read-only at /opt/meridian/connect. Containers reach the
+# host's Meridian app, storage and source database through host.docker.internal.
+x-spark: &spark
+  build: {context: ., dockerfile: Dockerfile}
+  image: meridian-spark-ingest:local
+  volumes: ["..:/opt/meridian/connect:ro"]
+  extra_hosts: ["host.docker.internal:host-gateway"]
+  environment: &env
+    PYTHONPATH: /opt/meridian/connect
+    SPARK_NO_DAEMONIZE: "true"
+services:
+  spark-master:
+    <<: *spark
+    hostname: spark-master
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "--host", "spark-master"]
+    ports: ["127.0.0.1:38080:8080"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/json/', timeout=2)"]
+      interval: 5s
+      retries: 40
+  spark-worker-1: &worker
+    <<: *spark
+    depends_on: {spark-master: {condition: service_healthy}}
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    environment: {<<: *env, SPARK_WORKER_CORES: "1", SPARK_WORKER_MEMORY: 1g}
+  spark-worker-2:
+    <<: *worker

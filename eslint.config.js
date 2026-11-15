@@ -43,6 +43,7 @@ export default tseslint.config(
     // Keep every correctness/security rule active; exempt only generated formatting.
     files: [
       "src/integrations/supabase/{types,client,client.server,auth-attacher,auth-middleware,previewAuthStorage,cron-auth}.ts",
+      "release/public/src/integrations/supabase/types.ts",
     ],
     rules: { "prettier/prettier": "off" },
   },
