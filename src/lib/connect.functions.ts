@@ -3,6 +3,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { identifier, primaryKeySpec } from "./connect-protocol";
 const CONNECT_SOURCES = ["postgres", "mysql", "kafka"];
+// Sources that can read the database's change log (deploy/connect/README.md, "Change data capture").
+const CDC_SOURCES = ["postgres", "mysql"];
 export const createConnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v: unknown) =>
@@ -11,6 +13,8 @@ export const createConnect = createServerFn({ method: "POST" })
         sourceId: z.string().uuid(),
         name: z.string().min(1).max(80),
         credentialRef: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/),
+        // CDC: read inserts, updates and deletes from the change log; its streams use sync mode cdc.
+        cdc: z.boolean().optional(),
       })
       .parse(v),
   )
@@ -24,6 +28,8 @@ export const createConnect = createServerFn({ method: "POST" })
     const kind = src.data?.kind ?? "";
     if (!src.data || src.data.owner_id !== context.userId || !CONNECT_SOURCES.includes(kind))
       throw new Error("Choose your PostgreSQL, MySQL or Kafka ingestion source");
+    if (data.cdc && !CDC_SOURCES.includes(kind))
+      throw new Error("Change data capture is available for PostgreSQL and MySQL sources");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const r = await supabaseAdmin
       .from("connect_connections")
@@ -33,7 +39,7 @@ export const createConnect = createServerFn({ method: "POST" })
         organization_id: src.data.organization_id,
         name: data.name,
         credential_ref: data.credentialRef,
-        source_version: `${kind}-v1`,
+        source_version: data.cdc ? `${kind}-cdc-v1` : `${kind}-v1`,
       })
       .select("id")
       .single();
@@ -74,7 +80,8 @@ export const configureConnect = createServerFn({ method: "POST" })
             name: identifier,
             primaryKey: primaryKeySpec,
             cursor: identifier,
-            mode: z.enum(["incremental", "full_refresh"]),
+            // cdc: CDC connections only (enforced by the connect_stream_cdc_mode trigger).
+            mode: z.enum(["incremental", "full_refresh", "cdc"]),
             // Kafka Avro streams: pin the latest version of a Meridian schema subject as the
             // reader schema, so writers that no longer resolve to it become dead letters.
             readerSchemaSubjectId: z.string().uuid().optional(),

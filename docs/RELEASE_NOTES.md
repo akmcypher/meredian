@@ -13,8 +13,17 @@ Demonstrated locally (Docker Desktop and a local kind cluster); not hosted or ce
   (`deploy/connect/spark/k8s/`), with per-run executor limits, a namespace quota and limit range,
   the restricted Pod Security profile, no API token in executors, a network policy, and the Spark
   secret passed by reference.
+- **Change data capture:** `postgres-cdc-v1` (logical replication) and `mysql-cdc-v1` (binlog)
+  copy a table once, then land every insert, update and delete in commit order, each once. They
+  fail closed on column changes, `TRUNCATE` and a lost position, report lag in bytes, and `check`
+  names any missing source setting. Migration 0105 adds sync mode `cdc`.
+- **Connect in the web app:** a connection list with health and lag, a detail view (overview,
+  streams, runs, settings) with guidance for every error code, and a new-connection wizard for
+  PostgreSQL, MySQL (cursor or CDC) and Kafka.
+- The agent image now includes the files and CDC connectors.
 - Known limitations: Spark on Kubernetes is tested on kind only and uses client mode (no Spark
-  Operator); Bronze parts are still NDJSON.
+  Operator); Bronze parts are still NDJSON; CDC is tested on local PostgreSQL and MySQL only, and a
+  paused PostgreSQL CDC stream holds WAL until its slot moves or is dropped.
 
 ## Meridian Community Preview 0.2
 

@@ -17,12 +17,36 @@ tests; none of it is hosted or production-certified. See [known limitations](#kn
 | File upload                                                                       | Browser upload                                                    | CSV, TSV, Parquet, Avro, JSON, JSON Lines, NDJSON                                                        |
 | PostgreSQL (`postgres-v1`)                                                        | Connect agent                                                     | Tables, full refresh or incremental (cursor + primary key)                                               |
 | MySQL (`mysql-v1`)                                                                | Connect agent                                                     | Tables, full refresh or incremental (cursor + primary key)                                               |
+| PostgreSQL CDC (`postgres-cdc-v1`)                                                | Connect agent, logical replication                                | Every insert, update and delete, in commit order, after a first full copy                                |
+| MySQL CDC (`mysql-cdc-v1`)                                                        | Connect agent, binlog                                             | Every insert, update and delete, in commit order, after a first full copy                                |
 | Kafka (`kafka-v1`)                                                                | Connect agent, one task per partition                             | JSON, Debezium JSON, Confluent wire-format Avro                                                          |
 | Object-store files (`files-v1`)                                                   | Connect agent                                                     | CSV, TSV, JSON Lines and Parquet under an S3-compatible prefix (AWS S3, GCS interoperability, MinIO, R2) |
 | Spark (`spark-postgres-v1`, `spark-mysql-v1`, `spark-files-v1`, `spark-kafka-v1`) | Spark cluster driven by the Connect agent                         | The same sources, read in parallel across executors                                                      |
 
 Database, Kafka and object-store credentials stay on the agent host; the control plane never
 opens connections into your network.
+
+## Change data capture
+
+- PostgreSQL through logical replication (`pgoutput` read with core SQL functions, so no extension
+  and no replication connection), MySQL through the binlog as a replica.
+- The first run copies the table; later runs land each change once, in commit order: inserts and
+  updates as upserts, deletes as deletes, a changed key as a delete and an upsert. Changed rows land
+  with the same values as the copy.
+- Fails closed instead of guessing: column changes, `TRUNCATE`, a lost replication position, and
+  (PostgreSQL) an unchanged large value without `REPLICA IDENTITY FULL`. A reset copies the table
+  again.
+- `check` names any missing source setting (`wal_level`, replication privilege, publication; binlog
+  format, row image and row metadata).
+- Lag in bytes of log behind the source, and the PostgreSQL slot name, in the stream view.
+
+## Connect in the web app
+
+- Connection list with health, last success and lag; a detail view with overview, streams, runs and
+  settings tabs; plain-language guidance for every error code.
+- A new-connection wizard for PostgreSQL, MySQL (cursor or CDC) and Kafka (managed profiles or
+  self-managed security), which writes the agent's credential file template with placeholders for
+  secrets.
 
 ## Spark for ingestion
 
@@ -107,8 +131,10 @@ connector. See the [connector developer guide](CONNECTOR_DEVELOPER_GUIDE.md).
 
 ## Known limitations
 
-- PostgreSQL and MySQL connectors are incremental cursor extractors, not change data capture:
-  deletes and updates that do not advance the cursor are not captured.
+- The cursor connectors (`postgres-v1`, `mysql-v1`) miss deletes and updates that don't advance
+  the cursor; use the CDC connectors for those tables.
+- CDC: a paused PostgreSQL stream keeps its slot and holds WAL on the source (watch the lag; drop
+  the slot to retire a stream). No GTID-based MySQL positions yet.
 - Spark: Bronze parts are NDJSON. Spark on Kubernetes is tested on a local kind cluster only, in
   client mode (no Spark Operator).
 - Object-store files: full refresh only; no Avro files or ADLS yet.

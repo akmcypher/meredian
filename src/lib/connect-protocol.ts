@@ -70,6 +70,29 @@ export const stateMessage = z.object({
         ),
       })
       .optional(),
+    // CDC streams (deploy/connect/README.md, "Change data capture"): the stream's replication position. "snapshot"
+    // while the table is copied (primary_key is the copy's progress), then "stream". PostgreSQL:
+    // the slot and the end LSN of the last landed transaction. MySQL: the binlog file and position.
+    cdc: z
+      .object({
+        phase: z.enum(["snapshot", "stream"]),
+        slot: z
+          .string()
+          .regex(/^meridian_[0-9a-f]{24}$/)
+          .optional(),
+        lsn: z
+          .string()
+          .regex(/^[0-9A-F]{1,8}\/[0-9A-F]{1,8}$/)
+          .optional(),
+        binlog: z
+          .object({
+            file: z.string().regex(/^[A-Za-z0-9._-]{1,200}$/),
+            position: z.number().int().nonnegative(),
+          })
+          .optional(),
+        server_id: z.number().int().min(1).max(4294967295).optional(),
+      })
+      .optional(),
   }),
 });
 export const deadLetterCode = z.enum([

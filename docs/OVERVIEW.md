@@ -113,14 +113,14 @@ the [connector developer guide](CONNECTOR_DEVELOPER_GUIDE.md).
 | Kafka partition | A topic is split into partitions so many readers can work in parallel; each keeps its own position. |
 | Spark executor  | One of the worker processes in a Spark cluster; more executors read more data at once.              |
 | Dead letter     | A record that couldn't be read, kept aside so it can be fixed and replayed.                         |
-| CDC             | Change data capture: reading a database's change log, including deletes. Not in Community yet.      |
+| CDC             | Change data capture: reading a database's change log, including deletes.                            |
 
 ## Where it stands
 
 Preview 0.2 is pre-release software for evaluation and feedback. Everything here runs on local
 machines and is covered by automated tests. It is not hosted or production-certified yet.
 
-- PostgreSQL and MySQL track changes by timestamp, not full CDC, so deleted rows are not picked up.
+- PostgreSQL and MySQL CDC are tested on local databases only, not on managed cloud databases.
 - Spark on Kubernetes and encrypted Spark traffic are tested on a local cluster only, not on a
   hosted one.
 - Cloud-storage files support full refresh only.

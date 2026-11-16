@@ -27,6 +27,8 @@ DO $$ DECLARE fn text; BEGIN
  IF has_function_privilege('authenticated','public.claim_ingest_partition(uuid,text,integer)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: claim_ingest_partition(uuid,text,integer)'; END IF;
  IF has_function_privilege('anon','public.claim_specific_partition(uuid,integer,text,integer)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: claim_specific_partition(uuid,integer,text,integer)'; END IF;
  IF has_function_privilege('authenticated','public.claim_specific_partition(uuid,integer,text,integer)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: claim_specific_partition(uuid,integer,text,integer)'; END IF;
+ IF has_function_privilege('anon','public.connect_stream_cdc_mode()','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: connect_stream_cdc_mode()'; END IF;
+ IF has_function_privilege('authenticated','public.connect_stream_cdc_mode()','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: connect_stream_cdc_mode()'; END IF;
  IF has_function_privilege('anon','public.connect_accept_offset_gap(uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: connect_accept_offset_gap(uuid)'; END IF;
  IF has_function_privilege('anon','public.connect_cancel(uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: connect_cancel(uuid)'; END IF;
  IF has_function_privilege('anon','public.connect_claim(uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: connect_claim(uuid)'; END IF;
