@@ -1,29 +1,55 @@
 # Meridian Community release notes
 
-## Unreleased (next preview)
+## Meridian Community Preview 0.3
 
-Demonstrated locally (Docker Desktop and a local kind cluster); not hosted or certified.
+Preview 0.3 is pre-release software for evaluation and feedback. It is not production-certified.
+Everything below was demonstrated on local stacks (Windows, Docker Desktop, and a local kind
+cluster for Kubernetes); none of it is hosted or certified yet.
 
+### What is new
+
+- **Change data capture:** `postgres-cdc-v1` (logical replication) and `mysql-cdc-v1` (binlog)
+  copy a table once, then land every insert, update and delete in commit order, each once, with
+  the same values as the copy. A changed key lands as a delete and an upsert. They fail closed on
+  column changes, `TRUNCATE` and a lost position, report lag in bytes of log, and `check` names any
+  missing source setting.
+- **Connect in the web app:** a connection list with health and lag, a detail view (overview,
+  streams, runs, settings) with guidance for every error code, and a new-connection wizard for
+  PostgreSQL, MySQL (cursor or CDC) and Kafka (managed profiles or self-managed security).
 - **Secured Spark:** Spark RPC is authenticated and encrypted. The driver checks
   `spark.authenticate`, `spark.network.crypto.enabled` and `spark.io.encryption.enabled` before any
   task (with source credentials and the lease token) leaves it, and fails the run with a
   `spark_insecure` log line otherwise. `allow_insecure_spark` allows it with a warning, for
-  throwaway local clusters only. The local cluster now creates and uses a shared secret.
+  throwaway local clusters only. The local cluster creates and uses a shared secret.
 - **Spark on Kubernetes:** run Spark ingestion on Kubernetes from a driver pod
   (`deploy/connect/spark/k8s/`), with per-run executor limits, a namespace quota and limit range,
   the restricted Pod Security profile, no API token in executors, a network policy, and the Spark
   secret passed by reference.
-- **Change data capture:** `postgres-cdc-v1` (logical replication) and `mysql-cdc-v1` (binlog)
-  copy a table once, then land every insert, update and delete in commit order, each once. They
-  fail closed on column changes, `TRUNCATE` and a lost position, report lag in bytes, and `check`
-  names any missing source setting. Migration 0105 adds sync mode `cdc`.
-- **Connect in the web app:** a connection list with health and lag, a detail view (overview,
-  streams, runs, settings) with guidance for every error code, and a new-connection wizard for
-  PostgreSQL, MySQL (cursor or CDC) and Kafka.
-- The agent image now includes the files and CDC connectors.
-- Known limitations: Spark on Kubernetes is tested on kind only and uses client mode (no Spark
-  Operator); Bronze parts are still NDJSON; CDC is tested on local PostgreSQL and MySQL only, and a
-  paused PostgreSQL CDC stream holds WAL until its slot moves or is dropped.
+- The Connect agent image now includes the files and CDC connectors.
+
+### Known limitations
+
+- CDC is tested on local PostgreSQL and MySQL only, not on managed cloud databases. A paused
+  PostgreSQL CDC stream keeps its slot and holds WAL on the source until the slot moves or is
+  dropped (watch the lag). MySQL positions are binlog file and offset (no GTID yet).
+- The cursor connectors (`postgres-v1`, `mysql-v1`) still miss deletes; use CDC for those tables.
+- Spark on Kubernetes is tested on kind only and uses client mode (no Spark Operator). Bronze parts
+  are NDJSON. PKCS#12 Kafka keystores are refused on Spark (use PEM files).
+- Files: full refresh only, at most 4,096 ranges per run; no Avro files and no ADLS yet.
+- Managed Kafka profiles are checked offline and against a local secured broker, not against the
+  hosted services.
+- Raw upsert/delete envelopes are retained as-is; no warehouse merge is applied.
+- Streams and connections cannot be deleted in the app yet.
+- Container images are not signed. Release archives are signed with Sigstore and carry SLSA
+  build provenance.
+
+### Upgrading from Preview 0.2
+
+Apply migration 0105 with the updated application. It adds sync mode `cdc` and the trigger that
+keeps `cdc` streams on CDC connections; existing streams are unchanged. Update Connect agents to
+the new image (or `deploy/connect` files and `requirements.txt`) before creating CDC connections.
+Spark clusters started from `deploy/connect/spark/compose.yml` must be recreated to pick up the
+shared secret; until then the driver refuses to run on them.
 
 ## Meridian Community Preview 0.2
 

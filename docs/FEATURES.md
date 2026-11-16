@@ -3,7 +3,7 @@
 Meridian Community is open-source data ingestion with a web control plane: it brings data in from
 APIs, files, databases, object stores and streams, and keeps it as immutable, verifiable raw
 (Bronze) batches that other engines can read. This page lists everything in the current release,
-**Community Preview 0.2**.
+**Community Preview 0.3**.
 
 Status: pre-release. Everything here is demonstrated on local stacks and covered by automated
 tests; none of it is hosted or production-certified. See [known limitations](#known-limitations).
