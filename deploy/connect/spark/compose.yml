@@ -1,30 +1,69 @@
-# Spark standalone cluster for ingestion tests (S1). Local testing only: ports bind to 127.0.0.1.
+# Spark standalone cluster for ingestion tests. Local testing only: ports bind to 127.0.0.1.
 #   docker compose -p meridian-spark -f deploy/connect/spark/compose.yml up -d --build --wait
 # Two workers with one core each, so a run with several partitions always uses at least two
 # executors. deploy/connect is mounted read-only at /opt/meridian/connect. Containers reach the
 # host's Meridian app, storage and source database through host.docker.internal.
+#
+# Secured (S5): spark-secret creates one random shared secret in the spark-secret volume, once.
+# Every node writes it, with RPC authentication and encryption turned on, into its private
+# spark-defaults.conf (spark/secure-conf.sh); spark-submit run inside the master container
+# (docker exec) uses the same file. An application without the secret cannot register.
 x-spark: &spark
-  build: {context: ., dockerfile: Dockerfile}
+  build: { context: ., dockerfile: Dockerfile }
   image: meridian-spark-ingest:local
-  volumes: ["..:/opt/meridian/connect:ro"]
+  volumes: ["..:/opt/meridian/connect:ro", "spark-secret:/run/meridian-spark:ro"]
   extra_hosts: ["host.docker.internal:host-gateway"]
   environment: &env
     PYTHONPATH: /opt/meridian/connect
     SPARK_NO_DAEMONIZE: "true"
+    SPARK_CONF_DIR: /tmp/spark-conf
 services:
+  spark-secret:
+    build: { context: ., dockerfile: Dockerfile }
+    image: meridian-spark-ingest:local
+    user: root
+    volumes: ["spark-secret:/secret"]
+    command:
+      - python3
+      - -c
+      - "import os,secrets;p='/secret/key';os.path.exists(p) or open(p,'w').write(secrets.token_hex(32));os.chown(p,185,185);os.chmod(p,0o400);os.chown('/secret',185,185);os.chmod('/secret',0o500)"
   spark-master:
     <<: *spark
     hostname: spark-master
-    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "--host", "spark-master"]
+    depends_on: { spark-secret: { condition: service_completed_successfully } }
+    command:
+      [
+        "sh",
+        "/opt/meridian/connect/spark/secure-conf.sh",
+        "/opt/spark/bin/spark-class",
+        "org.apache.spark.deploy.master.Master",
+        "--host",
+        "spark-master",
+      ]
     ports: ["127.0.0.1:38080:8080"]
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/json/', timeout=2)"]
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/json/', timeout=2)",
+        ]
       interval: 5s
       retries: 40
   spark-worker-1: &worker
     <<: *spark
-    depends_on: {spark-master: {condition: service_healthy}}
-    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
-    environment: {<<: *env, SPARK_WORKER_CORES: "1", SPARK_WORKER_MEMORY: 1g}
+    depends_on: { spark-master: { condition: service_healthy } }
+    command:
+      [
+        "sh",
+        "/opt/meridian/connect/spark/secure-conf.sh",
+        "/opt/spark/bin/spark-class",
+        "org.apache.spark.deploy.worker.Worker",
+        "spark://spark-master:7077",
+      ]
+    environment: { <<: *env, SPARK_WORKER_CORES: "1", SPARK_WORKER_MEMORY: 1g }
   spark-worker-2:
     <<: *worker
+volumes:
+  spark-secret:

@@ -29,6 +29,24 @@ FETCH=1000
 class Stop(Exception):
     # detail: positions, identities and counts only (never record data), reported by the agent.
     def __init__(self, code, detail=None): super().__init__(code); self.code=code; self.detail=detail
+# Source credentials, the ingest token and the lease token travel to executors in task closures
+# over Spark RPC, and record data comes back the same way. Spark leaves RPC unauthenticated and in
+# clear text by default, so the driver refuses to run a task unless the cluster requires the
+# shared secret and encrypts both the network and local spill files (S5).
+SECURE={'spark.authenticate':'true','spark.network.crypto.enabled':'true','spark.io.encryption.enabled':'true'}
+def insecure_settings(get):
+    """The required settings that are off, given get(key) -> configured value or None."""
+    return sorted(k for k,v in SECURE.items() if str(get(k) or 'false').strip().lower()!=v)
+def log(level, code, **fields):
+    print(json.dumps({'type':'LOG','log':{'level':level,'code':code,**fields}}),flush=True)
+def require_secure(conf, options):
+    missing=insecure_settings(lambda k: conf.get(k,None))
+    if not missing: return
+    # Local development only: an explicit option, and a warning the agent passes on.
+    if options.get('allow_insecure_spark') is True:
+        log('WARN','spark_insecure_allowed',settings=missing); return
+    log('ERROR','spark_insecure',settings=missing)
+    raise Stop('connector_failed')
 class Postgres:
     consistency='single'  # every partition reads the driver's exported snapshot
     shared_snapshot=True
@@ -258,6 +276,8 @@ def drive(job, done, checkpoint, load):
         from pyspark.sql import SparkSession
         spark=SparkSession.builder.appName(f"meridian-ingest-{claim['run_id'][:8]}").getOrCreate()
         sc=spark.sparkContext
+        # Before any closure (and the credentials in it) leaves the driver.
+        require_secure(sc.getConf(),job.get('options') or {})
         def run_task(i):
             if aborted.is_set(): return
             after=done[str(i)]['after']

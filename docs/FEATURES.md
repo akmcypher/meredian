@@ -39,7 +39,14 @@ opens connections into your network.
   readers see ordinary batches.
 - Every Spark connector is tested against its single-worker counterpart: same rows, same
   committed positions, and failed attempts resume without loss or duplicates.
-- A local Spark cluster (master and two workers) is in `deploy/connect/spark/`.
+- Secured Spark: the driver refuses to run unless Spark RPC authentication, network encryption and
+  spill-file encryption are all on, before any credentials leave it. The local cluster
+  (`deploy/connect/spark/`, master and two workers) runs with a shared secret only the Spark user
+  can read.
+- Spark on Kubernetes (`deploy/connect/spark/k8s/`): executor pods with CPU and memory limits, a
+  namespace quota, the restricted Pod Security profile, no Kubernetes API access for executors, a
+  network policy that admits only Spark pods, and the Spark secret passed by reference (never as a
+  value in a pod spec). A local kind cluster setup is included.
 
 ## Kafka
 
@@ -102,8 +109,8 @@ connector. See the [connector developer guide](CONNECTOR_DEVELOPER_GUIDE.md).
 
 - PostgreSQL and MySQL connectors are incremental cursor extractors, not change data capture:
   deletes and updates that do not advance the cursor are not captured.
-- Spark: RPC authentication and encryption are not configured, Kubernetes is not supported yet,
-  and Bronze parts are NDJSON.
+- Spark: Bronze parts are NDJSON. Spark on Kubernetes is tested on a local kind cluster only, in
+  client mode (no Spark Operator).
 - Object-store files: full refresh only; no Avro files or ADLS yet.
 - Managed Kafka profiles are checked offline and against a local secured broker, not against the
   hosted services.

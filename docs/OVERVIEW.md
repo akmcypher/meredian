@@ -121,7 +121,8 @@ Preview 0.2 is pre-release software for evaluation and feedback. Everything here
 machines and is covered by automated tests. It is not hosted or production-certified yet.
 
 - PostgreSQL and MySQL track changes by timestamp, not full CDC, so deleted rows are not picked up.
-- Spark on Kubernetes and encrypted Spark traffic are not available yet.
+- Spark on Kubernetes and encrypted Spark traffic are tested on a local cluster only, not on a
+  hosted one.
 - Cloud-storage files support full refresh only.
 - Managed Kafka profiles are tested offline and against a local secured broker, not against the
   hosted services.

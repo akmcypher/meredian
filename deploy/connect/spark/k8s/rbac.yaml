@@ -1,0 +1,47 @@
+# The driver creates and removes its own executor pods, and nothing else. Executors get no
+# Kubernetes API access at all (no service account token is mounted).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spark-driver
+  namespace: meridian-spark
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spark-executor
+  namespace: meridian-spark
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spark-driver
+  namespace: meridian-spark
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [create, get, list, watch, delete, deletecollection]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create, get, list, watch, delete, deletecollection]
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [get, list, delete, deletecollection]
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    verbs: [get, list, deletecollection]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: spark-driver
+  namespace: meridian-spark
+subjects:
+  - kind: ServiceAccount
+    name: spark-driver
+    namespace: meridian-spark
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: spark-driver

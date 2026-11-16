@@ -11,6 +11,7 @@ import {
   SparkHarness,
   byKey,
   executors,
+  K8S,
   live,
   MASTER,
   type Conn,
@@ -108,7 +109,8 @@ const operations = (lines: Line[]) =>
   lines.map((l) => `${JSON.stringify(l["primary_key"])}:${String(l["operation"])}`).sort();
 const positions = async (c: Conn) => (await h.state(c)).positions as Record<string, string>;
 
-describe.skipIf(!live || !reachable())(
+// Standalone only: the Kafka fixture joins the Spark containers to the brokers' Docker network.
+describe.skipIf(!live || !!K8S || !reachable())(
   "Spark ingestion (S4): Kafka in offset chunks per partition",
   { timeout: 1200000 },
   () => {

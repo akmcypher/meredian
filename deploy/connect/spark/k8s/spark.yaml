@@ -1,0 +1,163 @@
+# Spark ingestion on Kubernetes (S5b, deploy/connect/README.md). A long-running driver pod in client
+# mode: the agent runs `kubectl exec -i deploy/spark-driver -- sh /opt/meridian/connect/spark-submit.sh`
+# per run, and the driver creates that run's executor pods. Apply with up.sh, which also creates the
+# `spark-auth` secret. No secret is in this file.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-conf
+  namespace: meridian-spark
+data:
+  spark-defaults.conf: |
+    spark.master                                     k8s://https://kubernetes.default.svc
+    spark.submit.deployMode                          client
+    spark.kubernetes.namespace                       meridian-spark
+    spark.kubernetes.container.image                 meridian-spark-ingest-k8s:local
+    spark.kubernetes.container.image.pullPolicy      Never
+    spark.kubernetes.executor.podTemplateFile        /opt/meridian/conf/executor.yaml
+    spark.kubernetes.authenticate.executor.serviceAccountName spark-executor
+    spark.kubernetes.executor.deleteOnTermination    true
+    spark.kubernetes.driver.ownPersistentVolumeClaim false
+    spark.kubernetes.driver.reusePersistentVolumeClaim false
+    # Authentication and encryption (S5a). The driver reads the secret from its mounted file, and
+    # Spark uses it base64-encoded. Executors read that encoded form from the `spark-auth` secret
+    # (key.b64) through a secretKeyRef: the executor file setting stops Spark from writing the
+    # secret's value into the executor pod spec, and executors can't use the file itself because
+    # Spark only reads secret files once it knows the master is Kubernetes.
+    spark.authenticate                               true
+    spark.authenticate.secret.driver.file            /run/meridian-spark/key
+    spark.authenticate.secret.executor.file          /run/meridian-spark/key
+    spark.kubernetes.executor.secretKeyRef._SPARK_AUTH_SECRET spark-auth:key.b64
+    spark.network.crypto.enabled                     true
+    spark.io.encryption.enabled                      true
+    spark.ui.enabled                                 false
+    # Executors reach the driver through the headless service below.
+    spark.driver.host                                spark-driver.meridian-spark.svc.cluster.local
+    spark.driver.bindAddress                         0.0.0.0
+    spark.driver.port                                7078
+    spark.driver.blockManager.port                   7079
+    spark.blockManager.port                          7079
+    spark.speculation                                false
+    # Resource limits per application: 2 executors of 1 core and 1 GiB (heap plus overhead).
+    spark.driver.memory                              1g
+    spark.executor.instances                         2
+    spark.executor.cores                             1
+    spark.kubernetes.executor.request.cores          500m
+    spark.kubernetes.executor.limit.cores            1
+    spark.executor.memory                            640m
+    spark.executor.memoryOverhead                    384m
+  # Executor pods: restricted Pod Security, no Kubernetes API token, read-only root filesystem.
+  executor.yaml: |
+    apiVersion: v1
+    kind: Pod
+    spec:
+      # No Kubernetes API credentials: the spark-executor service account turns off mounting them.
+      serviceAccountName: spark-executor
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 185
+        runAsGroup: 185
+        fsGroup: 185
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: executor
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 1Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-driver
+  namespace: meridian-spark
+spec:
+  clusterIP: None
+  selector: { app: spark-driver }
+  ports:
+    - { name: driver, port: 7078 }
+    - { name: block-manager, port: 7079 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-driver
+  namespace: meridian-spark
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: spark-driver }
+  template:
+    metadata:
+      labels: { app: spark-driver, spark-role: driver }
+    spec:
+      serviceAccountName: spark-driver
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 185
+        runAsGroup: 185
+        fsGroup: 185
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: driver
+          image: meridian-spark-ingest-k8s:local
+          imagePullPolicy: Never
+          # Executors are owned by this pod (spark.kubernetes.driver.pod.name), so they are removed
+          # with it.
+          command:
+            - sh
+            - -c
+            - >-
+              mkdir -p "$SPARK_CONF_DIR" &&
+              cp /opt/meridian/conf/spark-defaults.conf "$SPARK_CONF_DIR/" &&
+              echo "spark.kubernetes.driver.pod.name $POD_NAME" >> "$SPARK_CONF_DIR/spark-defaults.conf" &&
+              exec sleep infinity
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - { name: SPARK_CONF_DIR, value: /tmp/spark-conf }
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { cpu: "1", memory: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: conf, mountPath: /opt/meridian/conf, readOnly: true }
+            - { name: spark-auth, mountPath: /run/meridian-spark, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: conf
+          configMap: { name: spark-conf }
+        - name: spark-auth
+          secret:
+            secretName: spark-auth
+            defaultMode: 0440
+            items: [{ key: key, path: key }]
+        - name: tmp
+          emptyDir: { sizeLimit: 1Gi }
+---
+# Ingress: nothing reaches Spark pods except the driver and executors of this namespace. Egress:
+# anything (sources, Meridian, object storage) except the cloud metadata address.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spark-ingest
+  namespace: meridian-spark
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions: [{ key: spark-role, operator: In, values: [driver, executor] }]
+  egress:
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0, except: [169.254.169.254/32] }
