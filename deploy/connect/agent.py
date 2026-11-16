@@ -12,6 +12,8 @@ LEASE_GRACE=float(os.environ.get('CONNECT_LEASE_GRACE_SECONDS','60'))
 BASE={'url':os.environ['MERIDIAN_URL'],'token_file':os.environ['INGEST_TOKEN_FILE']}
 # source_version 'postgres-v1' runs source_postgres.py. Only certified actors are listed.
 SOURCES={'postgres':'source_postgres.py','mysql':'source_mysql.py','kafka':'source_kafka.py','files':'source_files.py',
+  # CDC (README, "Change data capture"): the database's change log, streams in sync mode `cdc`.
+  'postgres-cdc':'source_postgres_cdc.py','mysql-cdc':'source_mysql_cdc.py',
   # Spark ingestion (deploy/connect/README.md, "Spark ingestion"): check and discover use the source's
   # own actor; sync, reset and backfill run as a Spark application (spark()).
   'spark-postgres':'source_postgres.py','spark-mysql':'source_mysql.py','spark-files':'source_files.py','spark-kafka':'source_kafka.py'}

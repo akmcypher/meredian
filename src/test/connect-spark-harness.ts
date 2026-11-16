@@ -67,6 +67,7 @@ export class SparkHarness {
   gateway = "";
   // The source config as Spark containers see it (defaults to the database host on the gateway).
   overrides: ((gateway: string) => Record<string, unknown>) | null = null;
+  constructor(readonly spark = true) {}
   // Extra spark-submit arguments for the next agent run (S5a turns a security setting off).
   submitConf: string[] = [];
 
@@ -79,15 +80,24 @@ export class SparkHarness {
     this.uid = u.data.user.id;
     this.owner = createClient(url!, key!, { auth: { persistSession: false } });
     await this.owner.auth.signInWithPassword({ email, password });
-    this.gateway = (
-      K8S
-        ? kube(["exec", "deploy/spark-driver", "--", "getent", "ahostsv4", "host.docker.internal"])
-        : execFileSync("docker", ["exec", MASTER, "getent", "ahostsv4", "host.docker.internal"], {
-            encoding: "utf8",
-          })
-    )
-      .trim()
-      .split(/\s+/)[0]!;
+    // Only Spark runs need the gateway; suites without a Spark cluster (CDC) skip the lookup.
+    if (this.spark)
+      this.gateway = (
+        K8S
+          ? kube([
+              "exec",
+              "deploy/spark-driver",
+              "--",
+              "getent",
+              "ahostsv4",
+              "host.docker.internal",
+            ])
+          : execFileSync("docker", ["exec", MASTER, "getent", "ahostsv4", "host.docker.internal"], {
+              encoding: "utf8",
+            })
+      )
+        .trim()
+        .split(/\s+/)[0]!;
     this.folder = await mkdtemp(join(tmpdir(), "connect-spark-"));
   }
   async teardown() {
@@ -134,7 +144,7 @@ export class SparkHarness {
   async stream(
     c: Conn,
     table: { namespace: string; name: string; primary_key: string; cursor_field: string },
-    sync_mode: "full_refresh" | "incremental",
+    sync_mode: "full_refresh" | "incremental" | "cdc",
   ) {
     await this.enqueue(c, "discover");
     await this.agent(c);

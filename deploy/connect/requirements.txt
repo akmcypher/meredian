@@ -1,5 +1,7 @@
 psycopg[binary]==3.2.10
 PyMySQL[rsa]==1.1.1
+# MySQL CDC (source_mysql_cdc.py): binlog reader, Apache-2.0.
+mysql-replication==1.0.17
 confluent-kafka==2.6.1
 fastavro==1.10.0
 aws-msk-iam-sasl-signer-python==1.0.2

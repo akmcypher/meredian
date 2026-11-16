@@ -22,6 +22,12 @@ const suites = [
   { file: "deploy/connect/test_certify_mysql.py", path: ["deploy/connect"] },
   // Skips unless deploy/connect/certify.compose.yml is running (3 Kafka brokers + Karapace).
   { file: "deploy/connect/test_kafka.py", path: ["deploy/connect"] },
+  // Offline: managed Kafka profiles, object-store range splitting, Spark plans and security, CDC
+  // decoding and positions.
+  { file: "deploy/connect/test_kafka_profiles.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_files.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_spark_plan.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_cdc.py", path: ["deploy/connect"] },
 ];
 const only = process.argv.slice(2);
 const selected = only.length ? suites.filter((s) => only.some((f) => s.file.includes(f))) : suites;
