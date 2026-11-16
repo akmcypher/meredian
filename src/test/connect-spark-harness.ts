@@ -1,5 +1,6 @@
 // Shared live-stack harness for the Spark ingestion suites (deploy/connect/README.md, "Spark ingestion").
-// A real Spark standalone cluster (deploy/connect/spark/compose.yml) runs the agent's Spark
+// A real Spark standalone cluster (deploy/connect/spark/compose.yml), or Spark on Kubernetes when
+// CONNECT_SPARK_K8S names a kubectl context (deploy/connect/spark/k8s), runs the agent's Spark
 // applications; connections, streams and runs are created through the same tables and RPCs the
 // app uses, and landed Bronze is read back from storage.
 import { createClient } from "@supabase/supabase-js";
@@ -14,8 +15,25 @@ export const url = process.env["SUPABASE_URL"],
   key = process.env["SUPABASE_PUBLISHABLE_KEY"] ?? process.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
 export const APP = process.env["APP_URL"] ?? "http://localhost:8080";
 export const MASTER = process.env["SPARK_TEST_CONTAINER"] ?? "meridian-spark-spark-master-1";
+// Set to a kubectl context (e.g. kind-meridian-spark) to run the suites on Spark on Kubernetes
+// (deploy/connect/spark/k8s) instead of the standalone cluster.
+export const K8S = process.env["CONNECT_SPARK_K8S"] ?? "";
+export const NAMESPACE = "meridian-spark";
+export function kube(args: string[], timeout = 60000) {
+  return execFileSync("kubectl", ["--context", K8S, "-n", NAMESPACE, ...args], {
+    encoding: "utf8",
+    timeout,
+  });
+}
 
 export function sparkUp() {
+  if (K8S) {
+    try {
+      return kube(["get", "deploy/spark-driver", "-o", "jsonpath={.status.readyReplicas}"]) === "1";
+    } catch {
+      return false;
+    }
+  }
   try {
     const out = execFileSync(
       "docker",
@@ -49,6 +67,8 @@ export class SparkHarness {
   gateway = "";
   // The source config as Spark containers see it (defaults to the database host on the gateway).
   overrides: ((gateway: string) => Record<string, unknown>) | null = null;
+  // Extra spark-submit arguments for the next agent run (S5a turns a security setting off).
+  submitConf: string[] = [];
 
   async setup() {
     this.db = createClient(url!, service!, { auth: { persistSession: false } });
@@ -59,10 +79,12 @@ export class SparkHarness {
     this.uid = u.data.user.id;
     this.owner = createClient(url!, key!, { auth: { persistSession: false } });
     await this.owner.auth.signInWithPassword({ email, password });
-    this.gateway = execFileSync(
-      "docker",
-      ["exec", MASTER, "getent", "ahostsv4", "host.docker.internal"],
-      { encoding: "utf8" },
+    this.gateway = (
+      K8S
+        ? kube(["exec", "deploy/spark-driver", "--", "getent", "ahostsv4", "host.docker.internal"])
+        : execFileSync("docker", ["exec", MASTER, "getent", "ahostsv4", "host.docker.internal"], {
+            encoding: "utf8",
+          })
     )
       .trim()
       .split(/\s+/)[0]!;
@@ -132,11 +154,13 @@ export class SparkHarness {
     if (st.error) throw st.error;
     c.stream = st.data.id;
   }
-  async agent(c: Conn, options: Record<string, unknown> = {}) {
+  // Runs one agent pass and resolves with its stdout (the agent's JSON log lines).
+  async agent(c: Conn, options: Record<string, unknown> = {}): Promise<string> {
     const tokenFile = join(this.folder, `token_${c.id}`);
     await writeFile(tokenFile, c.token, { mode: 0o600 });
     const gateway = this.gateway;
-    await new Promise<void>((resolve, reject) => {
+    const extra = this.submitConf.map((a) => ` ${a}`).join("");
+    return await new Promise<string>((resolve, reject) => {
       const p = spawn(process.env["PYTHON"] ?? "python3", ["deploy/connect/agent.py"], {
         env: {
           ...process.env,
@@ -145,7 +169,10 @@ export class SparkHarness {
           INGEST_TOKEN_FILE: tokenFile,
           CONNECT_SECRET_DIR: this.folder,
           CONNECT_ONCE: "1",
-          CONNECT_SPARK_SUBMIT: `docker exec -i ${MASTER} sh /opt/meridian/connect/spark-submit.sh --master spark://spark-master:7077 --conf spark.driver.host=spark-master --conf spark.driver.bindAddress=0.0.0.0 --conf spark.speculation=false --conf spark.executorEnv.PYTHONPATH=/opt/meridian/connect`,
+          // On Kubernetes the driver pod's spark-defaults.conf holds the master, image and limits.
+          CONNECT_SPARK_SUBMIT: K8S
+            ? `kubectl --context ${K8S} -n ${NAMESPACE} exec -i deploy/spark-driver -- sh /opt/meridian/connect/spark-submit.sh${extra}`
+            : `docker exec -i ${MASTER} sh /opt/meridian/connect/spark-submit.sh --master spark://spark-master:7077 --conf spark.driver.host=spark-master --conf spark.driver.bindAddress=0.0.0.0 --conf spark.speculation=false --conf spark.executorEnv.PYTHONPATH=/opt/meridian/connect${extra}`,
           CONNECT_SPARK_MERIDIAN_URL: APP.replace(/localhost|127\.0\.0\.1/, gateway),
           CONNECT_SPARK_CONFIG_OVERRIDES: JSON.stringify(
             this.overrides ? this.overrides(gateway) : { host: gateway },
@@ -161,9 +188,14 @@ export class SparkHarness {
             ...options,
           }),
         },
-        stdio: ["ignore", "ignore", "pipe"],
+        stdio: ["ignore", "pipe", "pipe"],
       });
-      p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error("Agent process failed"))));
+      let out = "";
+      p.stdout!.setEncoding("utf8").on("data", (d: string) => (out += d));
+      p.stderr!.resume();
+      p.on("close", (code) =>
+        code === 0 ? resolve(out) : reject(new Error("Agent process failed")),
+      );
     });
   }
   async enqueue(c: Conn, operation: string) {

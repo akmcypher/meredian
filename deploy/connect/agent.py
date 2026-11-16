@@ -111,6 +111,9 @@ def spark(claim, config_path, stop, deadline):
             except ValueError: continue
             if isinstance(message,dict) and message.get('type')=='TRACE':
                 trace=message.get('trace',{}); code=trace.get('code',code); detail=trace.get('detail')
+            # Operator warnings and errors (e.g. spark_insecure), as for actors.
+            elif isinstance(message,dict) and message.get('type')=='LOG' and message.get('log',{}).get('level') in ('WARN','ERROR'):
+                print(json.dumps(message),flush=True)
         if fired.is_set(): raise ActorError('timeout')
         if proc.wait()!=0: raise ActorError(code if code in SAFE else 'connector_failed',detail if code in REPORTED else None)
     finally:

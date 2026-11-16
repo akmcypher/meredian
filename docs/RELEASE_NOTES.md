@@ -1,10 +1,28 @@
-# Meridian Community Preview 0.2
+# Meridian Community release notes
+
+## Unreleased (next preview)
+
+Demonstrated locally (Docker Desktop and a local kind cluster); not hosted or certified.
+
+- **Secured Spark:** Spark RPC is authenticated and encrypted. The driver checks
+  `spark.authenticate`, `spark.network.crypto.enabled` and `spark.io.encryption.enabled` before any
+  task (with source credentials and the lease token) leaves it, and fails the run with a
+  `spark_insecure` log line otherwise. `allow_insecure_spark` allows it with a warning, for
+  throwaway local clusters only. The local cluster now creates and uses a shared secret.
+- **Spark on Kubernetes:** run Spark ingestion on Kubernetes from a driver pod
+  (`deploy/connect/spark/k8s/`), with per-run executor limits, a namespace quota and limit range,
+  the restricted Pod Security profile, no API token in executors, a network policy, and the Spark
+  secret passed by reference.
+- Known limitations: Spark on Kubernetes is tested on kind only and uses client mode (no Spark
+  Operator); Bronze parts are still NDJSON.
+
+## Meridian Community Preview 0.2
 
 Preview 0.2 is pre-release software for evaluation and feedback. It is not production-certified.
 Everything below was demonstrated on local stacks (Windows, Docker Desktop); none of it is hosted
 or certified yet.
 
-## What is new
+### What is new
 
 - **Parallel runs (Connect tasks):** each stream of a run is a leased task, so several agents work
   on one run at once. Tasks are fenced and retried on their own; agents from 0.1 keep working.
@@ -29,7 +47,7 @@ or certified yet.
     `deploy/connect/spark/`.
 - **Installers:** launchers and packages for macOS and Linux next to the Windows installer.
 
-## Known limitations
+### Known limitations
 
 - PostgreSQL and MySQL actors are incremental cursor extractors, not CDC: deletes and updates that
   do not advance the cursor are not captured.
@@ -47,18 +65,18 @@ or certified yet.
 - Container images are not signed. Release archives are signed with Sigstore and carry SLSA
   build provenance.
 
-## Upgrading from Preview 0.1
+### Upgrading from Preview 0.1
 
 Apply migrations 0094 to 0097 in order, with the updated application. They add leased tasks per
 stream (0094), Kafka partition tasks (0095), partition lag (0096) and a claim fix for tasks whose
 stream already completed (0097). Runs already queued keep working; agents from 0.1 use the
 run-level lease until they are updated.
 
-# Meridian Community Preview 0.1
+## Meridian Community Preview 0.1
 
 Preview 0.1 is pre-release software for evaluation and feedback. It is not production-certified.
 
-## What is included
+### What is included
 
 - **Sources:** manual REST pulls, a Push API, native file upload (CSV, TSV, Parquet, Avro, JSON,
   JSONL, NDJSON), and Connect actors for PostgreSQL, MySQL and Kafka.
@@ -75,7 +93,7 @@ Preview 0.1 is pre-release software for evaluation and feedback. It is not produ
   tokens, request limits, an append-only hash-chained admin audit and least-privilege database
   grants for anonymous and signed-in clients.
 
-## Known limitations
+### Known limitations
 
 - PostgreSQL and MySQL actors are incremental cursor extractors, not CDC: deletes and updates that
   do not advance the cursor are not captured.
@@ -87,7 +105,7 @@ Preview 0.1 is pre-release software for evaluation and feedback. It is not produ
 - Team invitations are not available yet.
 - Container images and release archives are not signed.
 
-## Upgrading an earlier preview database
+### Upgrading an earlier preview database
 
 Apply migrations in order and never edit applied files. Before upgrading past migration 0071,
 cancel outstanding replay runs and requeue still-open dead letters afterwards. Migration 0073 and

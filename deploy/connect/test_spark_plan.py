@@ -3,7 +3,9 @@ behaviour is covered live by src/test/connect-spark-s4.e2e.test.ts."""
 import sys, unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).parent))
-from spark_ingest import kafka_plan
+import io, json
+from contextlib import redirect_stdout
+from spark_ingest import kafka_plan, insecure_settings, require_secure, Stop
 def offsets(plan):
     out={}
     for p,a,b in plan:
@@ -31,4 +33,28 @@ class KafkaPlan(unittest.TestCase):
         plan=kafka_plan({p:0 for p in range(8)},{p:10**7 for p in range(8)},10,None)
         self.assertLessEqual(len(plan),4096)
         self.assertEqual(sum(b-a for _,a,b in plan),8*10**7)
+class SparkSecurity(unittest.TestCase):
+    SECURE={'spark.authenticate':'true','spark.network.crypto.enabled':'true','spark.io.encryption.enabled':'true'}
+    def run_check(self, conf, options=None):
+        out=io.StringIO()
+        with redirect_stdout(out): require_secure(conf,options or {})
+        return [json.loads(l) for l in out.getvalue().splitlines()]
+    def test_secure_cluster_passes_silently(self):
+        self.assertEqual(insecure_settings(self.SECURE.get),[])
+        self.assertEqual(self.run_check(dict(self.SECURE)),[])
+    def test_defaults_are_insecure(self):
+        self.assertEqual(insecure_settings({}.get),sorted(self.SECURE))
+    def test_any_missing_setting_refuses_and_says_which(self):
+        for key in self.SECURE:
+            conf={**self.SECURE,key:'false'}
+            out=io.StringIO()
+            with redirect_stdout(out), self.assertRaises(Stop) as e: require_secure(conf,{})
+            self.assertEqual(e.exception.code,'connector_failed')
+            self.assertEqual(json.loads(out.getvalue())['log'],{'level':'ERROR','code':'spark_insecure','settings':[key]})
+    def test_values_are_case_and_space_tolerant(self):
+        self.assertEqual(insecure_settings({k:' TRUE ' for k in self.SECURE}.get),[])
+    def test_explicit_option_allows_with_warning(self):
+        self.assertEqual(self.run_check({},{'allow_insecure_spark':True})[0]['log']['code'],'spark_insecure_allowed')
+        # Only a real boolean true counts.
+        with redirect_stdout(io.StringIO()), self.assertRaises(Stop): require_secure({},{'allow_insecure_spark':'true'})
 if __name__=='__main__': unittest.main()

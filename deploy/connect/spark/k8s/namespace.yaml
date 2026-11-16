@@ -1,0 +1,37 @@
+# Namespace for Spark ingestion on Kubernetes (S5b). The restricted Pod Security profile is
+# enforced, so the driver and every executor run as non-root with no added capabilities, no
+# privilege escalation and the runtime's default seccomp profile.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: meridian-spark
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+# Caps what all Spark applications in the namespace can use together.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: spark-ingest
+  namespace: meridian-spark
+spec:
+  hard:
+    pods: "8"
+    requests.cpu: "4"
+    requests.memory: 6Gi
+    limits.cpu: "6"
+    limits.memory: 6Gi
+---
+# Every container gets limits (defaults when a pod sets none) and none can exceed the maximum.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: spark-ingest
+  namespace: meridian-spark
+spec:
+  limits:
+    - type: Container
+      default: { cpu: "1", memory: 1Gi }
+      defaultRequest: { cpu: 250m, memory: 512Mi }
+      max: { cpu: "2", memory: 2Gi }
