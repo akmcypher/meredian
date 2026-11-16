@@ -7,7 +7,7 @@ databases, event streams, files and APIs into one raw, append-only store, checks
 the way in, and lets your analytics tools read it safely. Your passwords and your network stay
 yours.
 
-[Download Preview 0.2](https://github.com/akmcypher/meredian/releases/tag/v0.2.0-preview) ·
+[Download Preview 0.3](https://github.com/akmcypher/meredian/releases/tag/v0.3.0-preview) ·
 [Full feature list](FEATURES.md) · Apache-2.0 · Windows, macOS and Linux
 
 ## How it works
@@ -23,7 +23,8 @@ flowchart LR
   S --> A -->|signed upload| B --> E
 ```
 
-1. **Connect.** Point Meridian at a database, topic, bucket or API from the web app.
+1. **Connect.** Point Meridian at a database, topic, bucket or API from the web app; a step-by-step
+   wizard tests the connection and lists the tables or topics to pick from.
 2. **Read where the data lives.** A small agent runs inside your network, so the cloud never
    needs a way into it.
 3. **Check and store.** Every batch is verified, then stored once and never changed.
@@ -32,15 +33,16 @@ flowchart LR
 
 ## Sources
 
-| Source                                                   | What it does for you                                                                                                                                                                               |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PostgreSQL                                               | Copy whole tables, or only rows that changed since last time.                                                                                                                                      |
-| MySQL                                                    | The same full and incremental copies, with MySQL's own types handled exactly.                                                                                                                      |
-| Kafka                                                    | Stream events from topics, including JSON, Debezium change events and Avro.                                                                                                                        |
-| Cloud storage files                                      | CSV, TSV, JSON Lines and Parquet from AWS S3, Google Cloud Storage, MinIO or Cloudflare R2.                                                                                                        |
-| REST APIs                                                | Pull JSON from any HTTP endpoint straight from the web app.                                                                                                                                        |
-| Push and upload                                          | Let your apps post records with a per-source key, or drag in CSV, Parquet, Avro or JSON files.                                                                                                     |
-| **Spark versions** of PostgreSQL, MySQL, files and Kafka | When a table, bucket or topic is too large for one machine, the work is split across a cluster and read in parallel. Same results as the single-machine version, checked by tests on every change. |
+| Source                                                   | What it does for you                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL                                               | Copy whole tables, or only rows that changed since last time.                                                                                                                                                                                                                       |
+| MySQL                                                    | The same full and incremental copies, with MySQL's own types handled exactly.                                                                                                                                                                                                       |
+| Kafka                                                    | Stream events from topics, including JSON, Debezium change events and Avro.                                                                                                                                                                                                         |
+| Cloud storage files                                      | CSV, TSV, JSON Lines and Parquet from AWS S3, Google Cloud Storage, MinIO or Cloudflare R2.                                                                                                                                                                                         |
+| REST APIs                                                | Pull JSON from any HTTP endpoint straight from the web app.                                                                                                                                                                                                                         |
+| Push and upload                                          | Let your apps post records with a per-source key, or drag in CSV, Parquet, Avro or JSON files.                                                                                                                                                                                      |
+| **Spark versions** of PostgreSQL, MySQL, files and Kafka | When a table, bucket or topic is too large for one machine, the work is split across a cluster and read in parallel. Same results as the single-machine version, checked by tests on every change. Runs on a Spark cluster or on Kubernetes, with encrypted, authenticated traffic. |
+| **Change data capture** for PostgreSQL and MySQL         | Every insert, update and delete, read from the database's own change log in the order it happened. Deleted rows are no longer missed.                                                                                                                                               |
 
 ## Built so data is never lost or counted twice
 
@@ -91,7 +93,7 @@ These are test sizes on a local two-worker Spark cluster, not performance benchm
 ## Running locally in two commands
 
 Start Docker, download the package for your system from the
-[release](https://github.com/akmcypher/meredian/releases/tag/v0.2.0-preview), and run these in the
+[release](https://github.com/akmcypher/meredian/releases/tag/v0.3.0-preview), and run these in the
 extracted folder. The launcher fetches pinned, hash-checked tools for you.
 
 | System                       | Commands                                             |
@@ -117,7 +119,7 @@ the [connector developer guide](CONNECTOR_DEVELOPER_GUIDE.md).
 
 ## Where it stands
 
-Preview 0.2 is pre-release software for evaluation and feedback. Everything here runs on local
+Preview 0.3 is pre-release software for evaluation and feedback. Everything here runs on local
 machines and is covered by automated tests. It is not hosted or production-certified yet.
 
 - PostgreSQL and MySQL CDC are tested on local databases only, not on managed cloud databases.

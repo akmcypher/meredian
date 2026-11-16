@@ -15,7 +15,7 @@ using a similar name.
 
 ## Meridian Community Preview — Disclaimer
 
-Meridian Community Preview 0.2 is pre-release software provided for evaluation, development, testing and community feedback.
+Meridian Community Preview 0.3 is pre-release software provided for evaluation, development, testing and community feedback.
 
 **Not production-certified:** Passing automated tests and CI checks does not constitute production certification, independent security certification, performance benchmarking or a guarantee of reliability or availability.
 
