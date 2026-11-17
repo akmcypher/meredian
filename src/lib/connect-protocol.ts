@@ -235,6 +235,8 @@ export const agentRequest = z.discriminatedUnion("action", [
     token: z.string().uuid(),
     streamId: z.string().uuid(),
     part: z.string().regex(SPARK_PART),
+    // S6: a part is NDJSON or Parquet (deploy/connect/bronze_parquet.py); the object key depends on it.
+    format: z.enum(["ndjson", "parquet"]).default("ndjson"),
   }),
   z.object({
     action: z.literal("commit_file"),
@@ -243,6 +245,7 @@ export const agentRequest = z.discriminatedUnion("action", [
     streamId: z.string().uuid(),
     sequence: z.number().int().nonnegative(),
     part: z.string().regex(SPARK_PART),
+    format: z.enum(["ndjson", "parquet"]).default("ndjson"),
     rows: z.number().int().min(0).max(10000),
     bytes: z
       .number()

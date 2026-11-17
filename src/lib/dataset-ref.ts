@@ -36,7 +36,10 @@ export const datasetRef = z
   .refine(
     (ref) =>
       ref.namespace === "connect"
-        ? ref.layer === "bronze" && ref.format === "ndjson" && ref.producedBy.product === "ingest"
+        ? ref.layer === "bronze" &&
+          // Bronze parts are NDJSON or, from Spark since S6, Parquet (src/lib/bronze-parquet.ts).
+          (ref.format === "ndjson" || ref.format === "parquet") &&
+          ref.producedBy.product === "ingest"
         : ref.producedBy.product === "transform" && ref.producedBy.attempt !== null,
     "Dataset producer, layer and format disagree",
   );
@@ -104,7 +107,8 @@ export function toDatasetRef(row: ManifestRow, url?: string): DatasetRef {
     name: row.name,
     layer: row.layer,
     versionId: row.version_id,
-    format: row.format ?? "parquet",
+    // Connect Bronze must name its format (NDJSON or Parquet parts); only Transform defaults to Parquet.
+    format: row.format ?? (row.namespace === "connect" ? undefined : "parquet"),
     location: { sha256: row.sha256, bytes: row.byte_count, url },
     rows: row.row_count,
     schema: row.schema,

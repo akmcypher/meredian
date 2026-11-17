@@ -8,15 +8,15 @@ class BronzeReader(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.root=pathlib.Path(self.temp.name)
         (self.root/'token').write_text('short-lived-fixture-token')
-        self.body='{"name":"é"}\n'.encode();self.bad_hash=False;self.redirect=False;self.headers=[]
+        self.body='{"name":"é"}\n'.encode();self.bad_hash=False;self.redirect=False;self.headers=[];self.format='ndjson';self.rows=None
         case=self
         class Handler(BaseHTTPRequestHandler):
             def log_message(self,*args): pass
             def do_POST(self):
                 request=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
                 case.headers.append((self.path,self.headers.get('Authorization')))
-                part={'datasetId':'dataset','namespace':'connect','format':'ndjson','sequence':0,
-                    'producedBy':{'runId':'run'},'rows':0 if not case.body else 1,
+                part={'datasetId':'dataset','namespace':'connect','format':case.format,'sequence':0,
+                    'producedBy':{'runId':'run'},'rows':case.rows if case.rows is not None else 0 if not case.body else 1,
                     'location':{'bytes':len(case.body),'sha256':'0'*64 if case.bad_hash else hashlib.sha256(case.body).hexdigest(),
                         'url':case.url+'/data'}}
                 self.send_response(200);self.end_headers()
@@ -55,5 +55,21 @@ class BronzeReader(unittest.TestCase):
     def test_real_sql_over_downloaded_utf8_rows(self):
         result=read(self.args(query=True))
         self.assertEqual((result['rows'],result['sqlRows']),(1,1))
+    def test_parquet_parts_are_read_and_counted(self):
+        # S6: a Spark part in layout meridian-bronze-parquet/1 (bronze_parquet.py).
+        import bronze_parquet
+        from test_bronze_parquet import records
+        envs=records()
+        for e in envs: e.update(run_id='run',stream_id='stream')
+        self.body=bronze_parquet.encode(envs);self.format='parquet';self.rows=3
+        result=read(self.args(query=True))
+        self.assertEqual((result['rows'],result['sqlRows']),(3,3))
+        self.assertEqual(bronze_parquet.decode(str(self.root/'output'/'0000000000.parquet')),envs)
+    def test_a_parquet_part_of_another_run_is_refused(self):
+        import bronze_parquet
+        from test_bronze_parquet import records
+        self.body=bronze_parquet.encode(records());self.format='parquet';self.rows=3
+        with self.assertRaisesRegex(ValueError,'run_mismatch'):read(self.args())
+        self.assertFalse((self.root/'output'/'COMPLETE.json').exists())
 
 if __name__=='__main__':unittest.main()

@@ -28,6 +28,7 @@ const suites = [
   { file: "deploy/connect/test_files.py", path: ["deploy/connect"] },
   { file: "deploy/connect/test_spark_plan.py", path: ["deploy/connect"] },
   { file: "deploy/connect/test_cdc.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_bronze_parquet.py", path: ["deploy/connect"] },
 ];
 const only = process.argv.slice(2);
 const selected = only.length ? suites.filter((s) => only.some((f) => s.file.includes(f))) : suites;

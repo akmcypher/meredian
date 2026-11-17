@@ -71,6 +71,11 @@ opens connections into your network.
   namespace quota, the restricted Pod Security profile, no Kubernetes API access for executors, a
   network policy that admits only Spark pods, and the Spark secret passed by reference (never as a
   value in a pod spec). A local kind cluster setup is included.
+- Parquet Bronze parts (opt-in, `CONNECT_SPARK_OPTIONS` `{"bronze_format": "parquet"}`): Spark writes
+  each part as Parquet, with one column per field typed from the stream schema, so every part of a
+  stream has the same columns. The parts hold exactly the records an NDJSON part would, and the server
+  decodes and checks them the same way. A part that can't be stored without changing a value stays
+  NDJSON. `read_bronze.py` reads both formats.
 
 ## Kafka
 

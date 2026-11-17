@@ -1,5 +1,21 @@
 # Meridian Community release notes
 
+## Unreleased (next preview)
+
+Demonstrated on a local stack with a two-worker Spark cluster; not hosted or certified.
+
+- **Parquet Bronze parts from Spark:** with `CONNECT_SPARK_OPTIONS` `{"bronze_format": "parquet"}`,
+  Spark runs land their Bronze parts as Parquet (layout `meridian-bronze-parquet/1`) instead of
+  NDJSON. Each data field is its own column, typed from the stream schema, so every part of a stream
+  has the same columns. The parts hold exactly the records an NDJSON part would; the server decodes
+  and checks every record before registering a part. A part that can't be stored without changing a
+  value (for example a `bigint` past 2^53) stays NDJSON. The default is unchanged, and batches the
+  agent pushes itself are always NDJSON.
+- **Readers accept both formats:** `read_bronze.py` downloads and checks Parquet parts and counts
+  over both formats with `--query-count`; the dataset registry records each part's format.
+- **Upgrading:** apply migration 0106 (`20261120000000_0106_bronze_parquet_parts.sql`) and update
+  the Spark image and agents. Without the option, nothing changes.
+
 ## Meridian Community Preview 0.3
 
 Preview 0.3 is pre-release software for evaluation and feedback. It is not production-certified.

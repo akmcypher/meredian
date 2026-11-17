@@ -190,37 +190,48 @@ def upload(job, i, items):
     import socket
     claim=job['claim']; stream=claim['streams'][0]
     executor=f"{socket.gethostname()}:{os.getpid()}"
-    out=[]; buf=[]; size=0; last=None; run={}; urls={}; dead=[]; dead_bytes=0
-    def fetch(k):
-        # One signed URL per part. The first response also carries the run's connection id and
-        # extraction time, which every envelope needs.
-        r=api(job,{'action':'upload_url','runId':claim['run_id'],'token':claim['lease_token'],'streamId':stream['id'],'part':f'{i}-{k}'})
-        run.update(connection_id=r['connection_id'],extracted_at=r['extracted_at']); urls[k]=r['url']
+    out=[]; buf=[]; size=0; last=None; run={}; urls={}; dead=[]; dead_bytes=0; envs=[]
+    # Parquet parts when the connection opts in (S6); a part whose records can't be laid out as
+    # columns falls back to NDJSON (bronze_parquet.encode). Size limits apply to the NDJSON size.
+    want=(job.get('options') or {}).get('bronze_format') or 'ndjson'
+    def fetch(k,fmt):
+        # One signed URL per part, for the part's format (the object key depends on it). The first
+        # response also carries the run's connection id and extraction time, which every envelope needs.
+        r=api(job,{'action':'upload_url','runId':claim['run_id'],'token':claim['lease_token'],'streamId':stream['id'],'part':f'{i}-{k}','format':fmt})
+        run.update(connection_id=r['connection_id'],extracted_at=r['extracted_at']); urls[k]=(fmt,r['url'])
     def flush():
-        nonlocal buf,size,dead,dead_bytes
+        nonlocal buf,size,dead,dead_bytes,envs
         k=len(out)
-        if k not in urls: fetch(k)
-        body=''.join(buf).encode()
-        req=urllib.request.Request(rewrite(job,urls.pop(k)),data=body,method='PUT',headers={'Content-Type':'application/x-ndjson','x-upsert':'false'})
+        body=None; fmt='ndjson'
+        if want=='parquet' and envs:
+            import bronze_parquet
+            body=bronze_parquet.encode(envs)
+            if body is not None: fmt='parquet'
+        if body is None: body=''.join(buf).encode()
+        if urls.get(k,(None,))[0]!=fmt: fetch(k,fmt)
+        kind='application/vnd.apache.parquet' if fmt=='parquet' else 'application/x-ndjson'
+        req=urllib.request.Request(rewrite(job,urls.pop(k)[1]),data=body,method='PUT',headers={'Content-Type':kind,'x-upsert':'false'})
         with urllib.request.urlopen(req,timeout=300) as r: r.read()
-        part={'part':f'{i}-{k}','rows':len(buf),'bytes':len(body),'sha256':hashlib.sha256(body).hexdigest(),'after':last,'executor':executor}
+        part={'part':f'{i}-{k}','format':fmt,'rows':len(buf),'bytes':len(body),'sha256':hashlib.sha256(body).hexdigest(),'after':last,'executor':executor}
         if dead: part['dead_letters']=dead
         out.append(part)
-        buf=[]; size=0; dead=[]; dead_bytes=0
+        buf=[]; size=0; dead=[]; dead_bytes=0; envs=[]
     for item in items:
-        if not run: fetch(0)
+        if not run: fetch(0,want)
         if item[0]=='dead':
             n=len(json.dumps(item[1]))
             if dead and (len(dead)>=DEAD_ITEMS or dead_bytes+n>DEAD_BYTES): flush()
             dead.append(item[1]); dead_bytes+=n; last=item[2]
             continue
         _,data,cursor,pk,pos,operation=item
-        line=json.dumps({'protocol':'meridian-connect/1','connection_id':run['connection_id'],'run_id':claim['run_id'],'stream_id':stream['id'],
+        env={'protocol':'meridian-connect/1','connection_id':run['connection_id'],'run_id':claim['run_id'],'stream_id':stream['id'],
             'schema':stream['schema'],'extracted_at':run['extracted_at'],'cursor':cursor,'primary_key':pk,'operation':operation,
-            'source_namespace':stream['namespace'],'source_stream':stream['name'],'data':data},separators=(',',':'),ensure_ascii=False)+'\n'
+            'source_namespace':stream['namespace'],'source_stream':stream['name'],'data':data}
+        line=json.dumps(env,separators=(',',':'),ensure_ascii=False)+'\n'
         n=len(line.encode())
         if (buf or dead) and (size+n>PART_BYTES or len(buf)>=PART_ROWS): flush()
         buf.append(line); size+=n; last=pos
+        if want=='parquet': envs.append(env)
     if buf or dead: flush()
     return out
 def load_partition(job, i, after, snapshot):
@@ -267,7 +278,7 @@ def drive(job, done, checkpoint, load):
             done[str(i)]={'after':part['after'],'done':last_of_task}
             complete=all(v['done'] for v in done.values())
             r=api(job,{'action':'commit_file','runId':claim['run_id'],'token':claim['lease_token'],'streamId':stream['id'],'sequence':seq['n'],
-                'part':part['part'],'rows':part['rows'],'bytes':part['bytes'],'sha256':part['sha256'],'executor':part['executor'],'state':checkpoint(complete),
+                'part':part['part'],'format':part.get('format','ndjson'),'rows':part['rows'],'bytes':part['bytes'],'sha256':part['sha256'],'executor':part['executor'],'state':checkpoint(complete),
                 **({'dead_letters':part['dead_letters']} if part.get('dead_letters') else {})})
             seq['n']=r['sequence']; committed['n']+=1; committed['complete']=complete
             if fail_after is not None and committed['n']>=int(fail_after): aborted.set(); raise Stop('connector_failed')
@@ -484,6 +495,7 @@ def main():
     stream=claim['streams'][0]
     if stream.get('sync_mode') not in ('full_refresh','incremental'): raise Stop('connector_failed')
     if kind=='kafka' and stream['sync_mode']!='incremental': raise Stop('connector_failed')
+    if (job.get('options') or {}).get('bronze_format',None) not in (None,'ndjson','parquet'): raise Stop('connector_failed')
     # Already committed in full (an earlier attempt failed after its last commit): nothing to load.
     if stream.get('completed'): return
     st=stream.get('state') or {}
