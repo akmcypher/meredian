@@ -77,6 +77,19 @@ opens connections into your network.
   decodes and checks them the same way. A part that can't be stored without changing a value stays
   NDJSON. `read_bronze.py` reads both formats.
 
+## Worker pools
+
+- A pool is a named group of agents in one workspace with its own token (`mp_...`, shown once and
+  stored only as a SHA-256 hash). Agents started with it claim tasks of every connection assigned to
+  the pool, least recently served connection first, so one large backfill can't starve other sources.
+- An optional per-connection parallel task limit (1 to 64; empty means no limit) counts that
+  connection's running tasks on every agent, through a pool or its own token.
+- A pool serves connections of its own workspace only, and no two of its connections may share a
+  credential file. Disabling a pool or issuing a new token stops its agents' calls at once; each
+  connection's own token keeps working.
+- Agents report their id, slot count and version; the Connect page lists pools with agents online,
+  their slots and assigned connections, and each connection's settings choose its pool and limit.
+
 ## Kafka
 
 - Topic discovery; one leased task per partition so several agents read a topic in parallel,
@@ -140,7 +153,7 @@ connector. See the [connector developer guide](CONNECTOR_DEVELOPER_GUIDE.md).
   the cursor; use the CDC connectors for those tables.
 - CDC: a paused PostgreSQL stream keeps its slot and holds WAL on the source (watch the lag; drop
   the slot to retire a stream). No GTID-based MySQL positions yet.
-- Spark: Bronze parts are NDJSON. Spark on Kubernetes is tested on a local kind cluster only, in
+- Spark: Bronze parts are NDJSON unless Parquet is turned on. Spark on Kubernetes is tested on a local kind cluster only, in
   client mode (no Spark Operator).
 - Object-store files: full refresh only; no Avro files or ADLS yet.
 - Managed Kafka profiles are checked offline and against a local secured broker, not against the

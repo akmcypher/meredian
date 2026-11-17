@@ -7,6 +7,10 @@ DO $$ BEGIN
   IF has_column_privilege('authenticated','public.connect_runs','lease_token','SELECT') THEN RAISE EXCEPTION 'Client can read connect_runs.lease_token'; END IF;
   IF has_column_privilege('authenticated','public.connect_run_streams','lease_token','SELECT') THEN RAISE EXCEPTION 'Client can read connect_run_streams.lease_token'; END IF;
   IF has_column_privilege('anon','public.connect_run_streams','lease_token','SELECT') THEN RAISE EXCEPTION 'Anon can read connect_run_streams.lease_token'; END IF;
+  -- Pool tokens (migration 0108) are agent credentials; clients never read their hashes or write pools.
+  IF has_column_privilege('authenticated','public.connect_pools','token_hash','SELECT') THEN RAISE EXCEPTION 'Client can read connect_pools.token_hash'; END IF;
+  IF has_table_privilege('authenticated','public.connect_pools','INSERT') OR has_table_privilege('authenticated','public.connect_pools','UPDATE') THEN RAISE EXCEPTION 'Client can write connect_pools'; END IF;
+  IF has_table_privilege('authenticated','public.connect_workers','INSERT') THEN RAISE EXCEPTION 'Client can write connect_workers'; END IF;
 END $$;
 CREATE TABLE public.meridian_acl_probe (id integer);
 CREATE TABLE core.meridian_acl_probe (id integer);

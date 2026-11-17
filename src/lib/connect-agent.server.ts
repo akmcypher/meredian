@@ -261,22 +261,80 @@ export async function handleConnectAgent(request: Request) {
     throw e;
   }
   const token = request.headers.get("x-ingest-token") ?? "";
-  if (!/^mi_[a-f0-9]{64}$/.test(token))
+  // A source token (mi_) serves its one connection; a pool token (mp_, migration 0108) serves every
+  // connection assigned to the pool, in the pool's workspace.
+  const isPool = /^mp_[a-f0-9]{64}$/.test(token);
+  if (!isPool && !/^mi_[a-f0-9]{64}$/.test(token))
     return Response.json({ error: "unauthorized" }, { status: 401 });
   const { supabaseAdmin: db } = await import("@/integrations/supabase/client.server");
-  const src = await db
-    .from("ingest_sources")
-    .select("id,owner_id,organization_id,enabled")
-    .eq("token_hash", await sha256(token))
-    .maybeSingle();
-  if (!src.data?.enabled) return Response.json({ error: "unauthorized" }, { status: 401 });
-  const c = await db
-    .from("connect_connections")
-    .select("*")
-    .eq("source_id", src.data.id)
-    .maybeSingle();
+  let body: unknown;
+  try {
+    body = JSON.parse(raw || "null");
+  } catch {
+    return Response.json({ error: "invalid_protocol" }, { status: 400 });
+  }
+  const parsed = agentRequest.safeParse(body);
+  if (!parsed.success) return Response.json({ error: "invalid_protocol" }, { status: 400 });
+  const data = parsed.data;
+  let scope: { owner_id: string; organization_id: string | null };
+  let c;
+  if (isPool) {
+    const pool = await db
+      .from("connect_pools")
+      .select("id,owner_id,organization_id,enabled")
+      .eq("token_hash", await sha256(token))
+      .maybeSingle();
+    if (!pool.data?.enabled) return Response.json({ error: "unauthorized" }, { status: 401 });
+    if (data.action === "claim" || data.action === "claim_task") {
+      // Pool agents claim tasks only; connect_claim_pool_task re-checks the pool and each
+      // connection's own claim rules, and names the connection in the claim.
+      try {
+        const r = await db.rpc("connect_claim_pool_task", {
+          _pool: pool.data.id,
+          ...(data.action === "claim_task" && data.worker ? { _worker: data.worker } : {}),
+          ...(data.action === "claim_task" && data.agent ? { _agent: data.agent } : {}),
+          ...(data.action === "claim_task" && data.slots ? { _slots: data.slots } : {}),
+          ...(data.action === "claim_task" && data.version ? { _version: data.version } : {}),
+        });
+        if (r.error) throw r.error;
+        const claim = r.data as ReplayClaim | null;
+        if (claim?.operation === "replay") await hydrateReplayClaim(claim, db);
+        return Response.json({ claim });
+      } catch {
+        return Response.json({ error: "operation_rejected", retryable: false }, { status: 409 });
+      }
+    }
+    // Every other call names a run: its connection must be assigned to this pool, in its workspace.
+    const owner = await db
+      .from("connect_runs")
+      .select("connection_id")
+      .eq("id", data.runId)
+      .maybeSingle();
+    c = await db
+      .from("connect_connections")
+      .select("*")
+      .eq("id", owner.data?.connection_id ?? "00000000-0000-0000-0000-000000000000")
+      .eq("pool_id", pool.data.id)
+      .maybeSingle();
+    if (!c.data) return Response.json({ error: "stale_attempt" }, { status: 409 });
+    if (
+      c.data.organization_id !== pool.data.organization_id ||
+      (pool.data.organization_id === null && c.data.owner_id !== pool.data.owner_id)
+    )
+      return Response.json({ error: "scope_mismatch" }, { status: 403 });
+    scope = { owner_id: c.data.owner_id, organization_id: c.data.organization_id };
+  } else {
+    const src = await db
+      .from("ingest_sources")
+      .select("id,owner_id,organization_id,enabled")
+      .eq("token_hash", await sha256(token))
+      .maybeSingle();
+    if (!src.data?.enabled) return Response.json({ error: "unauthorized" }, { status: 401 });
+    c = await db.from("connect_connections").select("*").eq("source_id", src.data.id).maybeSingle();
+    scope = src.data;
+  }
   if (!c.data?.enabled) return Response.json({ error: "unavailable" }, { status: 403 });
-  if (c.data.owner_id !== src.data.owner_id || c.data.organization_id !== src.data.organization_id)
+  if (c.data.owner_id !== scope.owner_id || c.data.organization_id !== scope.organization_id)
     return Response.json({ error: "scope_mismatch" }, { status: 403 });
   if (c.data.organization_id) {
     const member = await db
@@ -287,15 +345,6 @@ export async function handleConnectAgent(request: Request) {
       .maybeSingle();
     if (member.error || !member.data) return Response.json({ error: "forbidden" }, { status: 403 });
   }
-  let body: unknown;
-  try {
-    body = JSON.parse(raw || "null");
-  } catch {
-    return Response.json({ error: "invalid_protocol" }, { status: 400 });
-  }
-  const parsed = agentRequest.safeParse(body);
-  if (!parsed.success) return Response.json({ error: "invalid_protocol" }, { status: 400 });
-  const data = parsed.data;
   try {
     if (data.action === "claim" || data.action === "claim_task") {
       const r =

@@ -166,6 +166,16 @@ export const agentRequest = z.discriminatedUnion("action", [
       .string()
       .regex(/^[\w.:-]{1,200}$/)
       .optional(),
+    // Pool agents (migration 0108) report themselves for the pool's worker list.
+    agent: z
+      .string()
+      .regex(/^[\w.:-]{1,200}$/)
+      .optional(),
+    slots: z.number().int().min(1).max(64).optional(),
+    version: z
+      .string()
+      .regex(/^[\w.+-]{1,40}$/)
+      .optional(),
   }),
   z.object({
     action: z.literal("report"),
