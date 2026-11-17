@@ -82,7 +82,7 @@ A `postgres-cdc-v1` connection reads PostgreSQL logical replication (`source_pos
 
 Live tests: `src/test/connect-cdc-postgres.e2e.test.ts` (needs `wal_level=logical` on the fixture database) and `src/test/connect-cdc-mysql.e2e.test.ts` (the MySQL test source; the test switches `binlog_row_metadata` and restores it). Offline: `deploy/connect/test_cdc.py`.
 
-## Spark ingestion (S1–S4, direct writes)
+## Spark ingestion (S1–S6, direct writes)
 
 A connection with `source_version: spark-postgres-v1`, `spark-mysql-v1`, `spark-files-v1` or `spark-kafka-v1` checks and discovers with that source's actor, and runs sync, reset and backfill of a full-refresh or incremental stream as a Spark application:
 
@@ -108,7 +108,16 @@ The local cluster is secured: a one-shot `spark-secret` service creates a random
 - **Local cluster:** `kind create cluster --config deploy/connect/spark/k8s/kind.yaml` then `sh deploy/connect/spark/k8s/up.sh` (builds the image with Meridian's Spark modules baked in, since executor pods have no host mounts). Live tests: set `CONNECT_SPARK_K8S=kind-meridian-spark` and run the Spark suites; `src/test/connect-spark-k8s.e2e.test.ts` checks the executor pod specs during a run, the namespace's admission rules and the network policy. S4 (Kafka) stays standalone-only, because its fixture joins Docker networks.
 - **Limits of the local evidence:** kind on one machine, images loaded with `kind load`. A hosted cluster brings its own registry, node pools and CNI; the NetworkPolicy needs a CNI that enforces it (kindnet does).
 
-Not yet: Parquet parts (S6), Avro and ADLS files, incremental files, the Spark Operator (S5b uses plain client mode).
+**Parquet Bronze parts (S6).** `CONNECT_SPARK_OPTIONS` `{"bronze_format": "parquet"}` makes a Spark run write its Bronze parts as Parquet instead of NDJSON (default `ndjson`; agent-pushed batches stay NDJSON). A part holds the same `meridian-connect/1` envelopes in layout `meridian-bronze-parquet/1` (`bronze_parquet.py`):
+
+- The fields shared by the whole part (protocol, connection, run, stream, schema, extraction time, source namespace and stream) are stored once, in the file's `meridian.bronze` key-value metadata, with the kind of every data column.
+- `_meridian_operation`, `_meridian_primary_key` and `_meridian_cursor` carry each record's envelope fields; every `data` field is its own column.
+- Column types come from the stream schema's `source_type`, so every part of a stream has the same Parquet schema: booleans (`boolean`, `tinyint(1)`), integers that always fit a JSON number (`smallint`, `integer`, MySQL `int` and smaller) and types the actors always send as text (strings, decimals, dates and times, UUIDs, bytes) are typed columns. Everything else (JSON, arrays, `bigint`, floats, unknown types) is JSON text, so no value changes.
+- A part that can't be laid out this way falls back to NDJSON for that part. That happens when records have different fields, a field is named `_meridian_*`, or a value doesn't fit its column (a `bigint` past 2^53 travels as text).
+- Before registering a part, the server decodes it and checks every envelope exactly as for NDJSON (`src/lib/bronze-parquet.ts`). The object key ends in `landing.parquet`, and the dataset version records format `parquet` (migration 0106).
+- Readers accept both formats: `read_bronze.py` (downloads `.parquet` files, checks their run and stream, and counts over both formats with `--query-count`) and the test harness. Parts are still at most 8 MiB and 10,000 records, measured on the NDJSON size.
+
+Not yet: Avro and ADLS files, incremental files, the Spark Operator (S5b uses plain client mode).
 
 ## Guarantees / gaps
 

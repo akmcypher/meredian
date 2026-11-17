@@ -9,6 +9,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sha256 } from "@/lib/ingest";
+import { bronzeParquetEnvelopes } from "@/lib/bronze-parquet";
 
 export const url = process.env["SUPABASE_URL"],
   service = process.env["SUPABASE_SERVICE_ROLE_KEY"],
@@ -230,7 +231,8 @@ export class SparkHarness {
     return (await this.db.from("connect_streams").select("state").eq("id", c.stream).single()).data
       .state;
   }
-  // Every landed Bronze line of a run, with the manifest of the commit that landed it.
+  // Every landed Bronze envelope of a run (NDJSON or Parquet parts), with the manifest of the
+  // commit that landed it.
   async landed(run: string) {
     const commits = (
       await this.db
@@ -246,10 +248,11 @@ export class SparkHarness {
         await (await this.db.storage.from("ingest-files").download(c.manifest_key)).data.text(),
       );
       manifests.push(m);
-      const text = await (
-        await this.db.storage.from("ingest-files").download(m.object_key)
-      ).data.text();
-      for (const l of text.split("\n").filter(Boolean)) lines.push(JSON.parse(l));
+      const body = (await this.db.storage.from("ingest-files").download(m.object_key)).data;
+      if (String(m.object_key).endsWith("/landing.parquet"))
+        lines.push(...((await bronzeParquetEnvelopes(await body.arrayBuffer())) as Line[]));
+      else
+        for (const l of (await body.text()).split("\n").filter(Boolean)) lines.push(JSON.parse(l));
     }
     return { commits, lines, manifests };
   }

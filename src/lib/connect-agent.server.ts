@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { z } from "zod";
 import { readBodyCapped } from "./request-limits.server";
 import { sha256 } from "./ingest";
+import { sha256Hex } from "./file-ingest";
+import { bronzeParquetEnvelopes, isParquet } from "./bronze-parquet";
 import { landSourceBatch } from "./landing-batch.server";
 type ReplayClaim = {
   run_id: string;
@@ -144,12 +146,20 @@ async function publishCommit(
 }
 
 // A Spark part is checked before it is registered: the stored object must be the bytes the
-// executor reported (size, SHA-256, line count) and every line a Connect envelope of this
-// connection, run and stream. Parts are ordinary landing batches (8 MiB, 10,000 rows at most).
+// executor reported (size, SHA-256, record count) and every record a Connect envelope of this
+// connection, run and stream. Parts are ordinary landing batches (8 MiB, 10,000 rows at most),
+// NDJSON or, since S6, Parquet (src/lib/bronze-parquet.ts), which decodes to the same envelopes.
 async function verifySparkPart(
   db: SupabaseClient,
   key: string,
-  claimed: { runId: string; streamId: string; rows: number; bytes: number; sha256: string },
+  claimed: {
+    runId: string;
+    streamId: string;
+    rows: number;
+    bytes: number;
+    sha256: string;
+    format: "ndjson" | "parquet";
+  },
   expect: {
     connection: string;
     stream: { namespace: string; name: string };
@@ -161,13 +171,24 @@ async function verifySparkPart(
   const stored = await db.storage.from("ingest-files").download(key);
   if (!stored.data || stored.data.size !== claimed.bytes || stored.data.size > 8 * 1024 * 1024)
     throw new Error("part_mismatch");
-  const text = await stored.data.text();
-  if ((await sha256(text)) !== claimed.sha256) throw new Error("part_mismatch");
-  const lines = text ? text.split("\n") : [];
-  if (lines.length && lines[lines.length - 1] === "") lines.pop();
-  if (lines.length !== claimed.rows) throw new Error("part_mismatch");
-  for (const line of lines) {
-    const e = JSON.parse(line) as Record<string, unknown>;
+  const bytes = new Uint8Array(await stored.data.arrayBuffer());
+  if ((await sha256Hex(bytes)) !== claimed.sha256) throw new Error("part_mismatch");
+  let envelopes: Record<string, unknown>[];
+  if (claimed.format === "parquet") {
+    if (!isParquet(bytes)) throw new Error("part_mismatch");
+    try {
+      envelopes = await bronzeParquetEnvelopes(bytes.slice().buffer);
+    } catch {
+      throw new Error("part_mismatch");
+    }
+  } else {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const lines = text ? text.split("\n") : [];
+    if (lines.length && lines[lines.length - 1] === "") lines.pop();
+    envelopes = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+  }
+  if (envelopes.length !== claimed.rows) throw new Error("part_mismatch");
+  for (const e of envelopes) {
     if (
       e["protocol"] !== "meridian-connect/1" ||
       e["connection_id"] !== expect.connection ||
@@ -185,7 +206,7 @@ async function verifySparkPart(
     )
       throw new Error("part_mismatch");
   }
-  return { sha256: claimed.sha256, rows: lines.length, bytes: claimed.bytes };
+  return { sha256: claimed.sha256, rows: envelopes.length, bytes: claimed.bytes };
 }
 
 // Dead letters are stored before the commit that moves the checkpoint past them; a retried
@@ -380,7 +401,8 @@ export async function handleConnectAgent(request: Request) {
         `spark:${data.runId}:${data.streamId}:${rs.data.shard}:${data.token}:${data.part}`,
       );
       const partBatch = `${partDigest.slice(0, 8)}-${partDigest.slice(8, 12)}-4${partDigest.slice(13, 16)}-a${partDigest.slice(17, 20)}-${partDigest.slice(20, 32)}`;
-      const partKey = `${c.data.owner_id}/published/${partBatch}/landing.ndjson`;
+      // The extension names the part's format; the registry reads it from the key (migration 0106).
+      const partKey = `${c.data.owner_id}/published/${partBatch}/landing.${data.format}`;
       const registered = await db
         .from("ingest_landing_batches")
         .select("id,sha256,row_count")

@@ -26,7 +26,7 @@ const row = {
 };
 
 describe("DatasetRef v1", () => {
-  it("preserves Connect Bronze format and provenance instead of relabelling it Parquet", () => {
+  it("preserves Connect Bronze format and provenance instead of relabelling it", () => {
     const bronze = {
       ...row,
       namespace: "connect",
@@ -40,7 +40,14 @@ describe("DatasetRef v1", () => {
       layer: "bronze",
       producedBy: { product: "ingest" },
     });
-    expect(() => toDatasetRef({ ...bronze, format: "parquet" })).toThrow();
+    // S6: a Spark part may be Parquet, but only when the registry says so.
+    expect(toDatasetRef({ ...bronze, format: "parquet" })).toMatchObject({ format: "parquet" });
+    expect(() =>
+      toDatasetRef(
+        Object.fromEntries(Object.entries(bronze).filter(([k]) => k !== "format")) as typeof bronze,
+      ),
+    ).toThrow();
+    expect(() => toDatasetRef({ ...bronze, format: "iceberg" })).toThrow();
     expect(
       toDatasetRef({ ...bronze, produced_by: { ...bronze.produced_by, attempt: null } }),
     ).toMatchObject({ producedBy: { attempt: null } });

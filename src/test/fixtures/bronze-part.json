@@ -1,0 +1,189 @@
+[
+ {
+  "protocol": "meridian-connect/1",
+  "connection_id": "11111111-1111-4111-8111-111111111111",
+  "run_id": "22222222-2222-4222-8222-222222222222",
+  "stream_id": "33333333-3333-4333-8333-333333333333",
+  "schema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "source_type": "integer",
+     "nullable": false
+    },
+    "big": {
+     "source_type": "bigint",
+     "nullable": true
+    },
+    "ok": {
+     "source_type": "boolean",
+     "nullable": true
+    },
+    "amount": {
+     "source_type": "numeric",
+     "nullable": true
+    },
+    "name": {
+     "source_type": "character varying",
+     "nullable": true
+    },
+    "at": {
+     "source_type": "timestamp with time zone",
+     "nullable": true
+    },
+    "doc": {
+     "source_type": "jsonb",
+     "nullable": true
+    },
+    "score": {
+     "source_type": "double precision",
+     "nullable": true
+    }
+   }
+  },
+  "extracted_at": 1794759162000,
+  "cursor": "2026-11-17T00:00:01+00:00",
+  "primary_key": 1,
+  "operation": "upsert",
+  "source_namespace": "public",
+  "source_stream": "orders",
+  "data": {
+   "id": 1,
+   "big": 9007199254740991,
+   "ok": true,
+   "amount": "12.50",
+   "name": "Zoë ✓",
+   "at": "2026-11-17T00:00:01+00:00",
+   "doc": {
+    "tags": [
+     "a",
+     "名"
+    ],
+    "n": null
+   },
+   "score": 1.5
+  }
+ },
+ {
+  "protocol": "meridian-connect/1",
+  "connection_id": "11111111-1111-4111-8111-111111111111",
+  "run_id": "22222222-2222-4222-8222-222222222222",
+  "stream_id": "33333333-3333-4333-8333-333333333333",
+  "schema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "source_type": "integer",
+     "nullable": false
+    },
+    "big": {
+     "source_type": "bigint",
+     "nullable": true
+    },
+    "ok": {
+     "source_type": "boolean",
+     "nullable": true
+    },
+    "amount": {
+     "source_type": "numeric",
+     "nullable": true
+    },
+    "name": {
+     "source_type": "character varying",
+     "nullable": true
+    },
+    "at": {
+     "source_type": "timestamp with time zone",
+     "nullable": true
+    },
+    "doc": {
+     "source_type": "jsonb",
+     "nullable": true
+    },
+    "score": {
+     "source_type": "double precision",
+     "nullable": true
+    }
+   }
+  },
+  "extracted_at": 1794759162000,
+  "cursor": "2026-11-17T00:00:02+00:00",
+  "primary_key": 2,
+  "operation": "upsert",
+  "source_namespace": "public",
+  "source_stream": "orders",
+  "data": {
+   "id": 2,
+   "big": "9007199254740993",
+   "ok": null,
+   "amount": null,
+   "name": "",
+   "at": null,
+   "doc": [
+    1,
+    2.25,
+    null
+   ],
+   "score": "NaN"
+  }
+ },
+ {
+  "protocol": "meridian-connect/1",
+  "connection_id": "11111111-1111-4111-8111-111111111111",
+  "run_id": "22222222-2222-4222-8222-222222222222",
+  "stream_id": "33333333-3333-4333-8333-333333333333",
+  "schema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "source_type": "integer",
+     "nullable": false
+    },
+    "big": {
+     "source_type": "bigint",
+     "nullable": true
+    },
+    "ok": {
+     "source_type": "boolean",
+     "nullable": true
+    },
+    "amount": {
+     "source_type": "numeric",
+     "nullable": true
+    },
+    "name": {
+     "source_type": "character varying",
+     "nullable": true
+    },
+    "at": {
+     "source_type": "timestamp with time zone",
+     "nullable": true
+    },
+    "doc": {
+     "source_type": "jsonb",
+     "nullable": true
+    },
+    "score": {
+     "source_type": "double precision",
+     "nullable": true
+    }
+   }
+  },
+  "extracted_at": 1794759162000,
+  "cursor": "2026-11-17T00:00:03+00:00",
+  "primary_key": 3,
+  "operation": "delete",
+  "source_namespace": "public",
+  "source_stream": "orders",
+  "data": {
+   "id": 3,
+   "big": null,
+   "ok": false,
+   "amount": "-0.000000001",
+   "name": null,
+   "at": "2026-11-17T00:00:03+00:00",
+   "doc": null,
+   "score": 2
+  }
+ }
+]

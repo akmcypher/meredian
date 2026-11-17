@@ -106,7 +106,11 @@ export async function reconcileIngestStorage(
       if (folder.id !== null) continue;
       for (const f of await list(db, `${owner}/published/${folder.name}`)) {
         const kind: Kind | null =
-          f.name === "landing.ndjson" ? "landing" : f.name === "manifest.json" ? "manifest" : null;
+          f.name === "landing.ndjson" || f.name === "landing.parquet"
+            ? "landing"
+            : f.name === "manifest.json"
+              ? "manifest"
+              : null;
         if (kind && f.id !== null)
           objs.push({
             key: `${owner}/published/${folder.name}/${f.name}`,
