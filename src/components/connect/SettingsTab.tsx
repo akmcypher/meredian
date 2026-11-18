@@ -11,6 +11,7 @@ import {
   type ConnectSourceKind,
 } from "@/lib/connect-setup";
 import { AgentFileTemplate } from "./AgentFileTemplate";
+import { ConnectionPoolSettings } from "./PoolsPanel";
 import type { ConnectConnection, ConnectSourceRow, useConnectActions } from "./use-connect";
 
 export function SettingsTab({
@@ -60,6 +61,7 @@ export function SettingsTab({
         </div>
         {problem && <p className="text-sm text-destructive">{problem}</p>}
       </section>
+      <ConnectionPoolSettings connection={c} />
       <section className="space-y-2">
         <h4 className="font-semibold">Source settings</h4>
         <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">

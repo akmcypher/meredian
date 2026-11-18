@@ -4,6 +4,7 @@ import { ConnectionList } from "./connect/ConnectionList";
 import { healthByConnection } from "./connect/connect-view";
 import { ConnectionDetail } from "./connect/ConnectionDetail";
 import { NewConnectionWizard } from "./connect/NewConnectionWizard";
+import { PoolsPanel } from "./connect/PoolsPanel";
 import { useConnectList } from "./connect/use-connect";
 
 type View = { kind: "list" } | { kind: "detail"; id: string } | { kind: "wizard" };
@@ -39,11 +40,14 @@ export function ConnectWorkspace() {
         />
       )}
       {(view.kind === "list" || (view.kind === "detail" && data && !selected)) && data && (
-        <ConnectionList
-          data={data}
-          onOpen={(id) => setView({ kind: "detail", id })}
-          onNew={() => setView({ kind: "wizard" })}
-        />
+        <>
+          <ConnectionList
+            data={data}
+            onOpen={(id) => setView({ kind: "detail", id })}
+            onNew={() => setView({ kind: "wizard" })}
+          />
+          {data.connections.length > 0 && <PoolsPanel data={data} />}
+        </>
       )}
       {query.isPending && <p role="status">Loading connections…</p>}
     </section>

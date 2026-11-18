@@ -135,14 +135,14 @@ isOneToOne: false
                   ]
                 },"connect_connections": {
                   Row: {
-                    "created_at": string,"credential_ref": string,"dead_letter_budget": number,"destination_version": string,"discovered_catalog": NonNullable<Json>,"enabled": boolean,"health": string,"id": string,"interval_minutes": number,"name": string,"next_run_at": string | null,"operation_timeout_seconds": number,"organization_id": string | null,"owner_id": string,"source_id": string,"source_version": string
+                    "created_at": string,"credential_ref": string,"dead_letter_budget": number,"destination_version": string,"discovered_catalog": NonNullable<Json>,"enabled": boolean,"health": string,"id": string,"interval_minutes": number,"last_claimed_at": string | null,"max_parallel_tasks": number | null,"name": string,"next_run_at": string | null,"operation_timeout_seconds": number,"organization_id": string | null,"owner_id": string,"pool_id": string | null,"source_id": string,"source_version": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"credential_ref": string,"dead_letter_budget"?: number,"destination_version"?: string,"discovered_catalog"?: NonNullable<Json>,"enabled"?: boolean,"health"?: string,"id"?: string,"interval_minutes"?: number,"name": string,"next_run_at"?: string | null,"operation_timeout_seconds"?: number,"organization_id"?: string | null,"owner_id": string,"source_id": string,"source_version"?: string
+                    "created_at"?: string,"credential_ref": string,"dead_letter_budget"?: number,"destination_version"?: string,"discovered_catalog"?: NonNullable<Json>,"enabled"?: boolean,"health"?: string,"id"?: string,"interval_minutes"?: number,"last_claimed_at"?: string | null,"max_parallel_tasks"?: number | null,"name": string,"next_run_at"?: string | null,"operation_timeout_seconds"?: number,"organization_id"?: string | null,"owner_id": string,"pool_id"?: string | null,"source_id": string,"source_version"?: string
                   }
                   Update: {
-                    "created_at"?: string,"credential_ref"?: string,"dead_letter_budget"?: number,"destination_version"?: string,"discovered_catalog"?: NonNullable<Json>,"enabled"?: boolean,"health"?: string,"id"?: string,"interval_minutes"?: number,"name"?: string,"next_run_at"?: string | null,"operation_timeout_seconds"?: number,"organization_id"?: string | null,"owner_id"?: string,"source_id"?: string,"source_version"?: string
+                    "created_at"?: string,"credential_ref"?: string,"dead_letter_budget"?: number,"destination_version"?: string,"discovered_catalog"?: NonNullable<Json>,"enabled"?: boolean,"health"?: string,"id"?: string,"interval_minutes"?: number,"last_claimed_at"?: string | null,"max_parallel_tasks"?: number | null,"name"?: string,"next_run_at"?: string | null,"operation_timeout_seconds"?: number,"organization_id"?: string | null,"owner_id"?: string,"pool_id"?: string | null,"source_id"?: string,"source_version"?: string
                   }
                   Relationships: [
                     {
@@ -150,6 +150,12 @@ isOneToOne: false
       columns: ["organization_id"]
 isOneToOne: false
       referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "connect_connections_pool_id_fkey"
+      columns: ["pool_id"]
+isOneToOne: false
+      referencedRelation: "connect_pools"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "connect_connections_source_id_fkey"
@@ -249,6 +255,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"connect_pools": {
+                  Row: {
+                    "created_at": string,"enabled": boolean,"id": string,"name": string,"organization_id": string | null,"owner_id": string,"token_hash": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"enabled"?: boolean,"id"?: string,"name": string,"organization_id"?: string | null,"owner_id": string,"token_hash": string
+                  }
+                  Update: {
+                    "created_at"?: string,"enabled"?: boolean,"id"?: string,"name"?: string,"organization_id"?: string | null,"owner_id"?: string,"token_hash"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"connect_run_streams": {
                   Row: {
                     "attempts": number,"checkpoint": NonNullable<Json>,"completed": boolean,"error_code": string | null,"finished_at": string | null,"generation": number,"initial_state": NonNullable<Json>,"lease_token": string | null,"lease_until": string | null,"next_attempt_at": string,"replay_deferred": number,"run_id": string,"schema_json": NonNullable<Json>,"sequence": number,"shard": string,"started_at": string | null,"stream_id": string,"task_status": string,"worker": string | null
@@ -272,6 +292,26 @@ isOneToOne: false
       columns: ["stream_id"]
 isOneToOne: false
       referencedRelation: "connect_streams"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"connect_workers": {
+                  Row: {
+                    "agent": string,"first_seen_at": string,"last_seen_at": string,"pool_id": string,"slots": number | null,"version": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agent": string,"first_seen_at"?: string,"last_seen_at"?: string,"pool_id": string,"slots"?: number | null,"version"?: string | null
+                  }
+                  Update: {
+                    "agent"?: string,"first_seen_at"?: string,"last_seen_at"?: string,"pool_id"?: string,"slots"?: number | null,"version"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "connect_workers_pool_id_fkey"
+      columns: ["pool_id"]
+isOneToOne: false
+      referencedRelation: "connect_pools"
       referencedColumns: ["id"]
     }
                   ]
@@ -926,6 +966,9 @@ isOneToOne: false
                            },
 "connect_claim":
 { Args: { "_connection": string }; Returns: Json
+                           },
+"connect_claim_pool_task":
+{ Args: { "_agent"?: string,"_pool": string,"_slots"?: number,"_version"?: string,"_worker"?: string }; Returns: Json
                            },
 "connect_claim_task":
 { Args: { "_connection": string,"_worker"?: string }; Returns: Json

@@ -175,9 +175,12 @@ def execute(claim):
 # Task claims hand out one stream of a run at a time, so slots (and other agents) work on a run's
 # streams in parallel. A server without task claims answers 400; the agent then claims whole runs.
 TASKS={'enabled':os.environ.get('CONNECT_TASKS','1')!='0'}
+# Reported with every task claim; a pool (migration 0108) lists its agents with these.
+AGENT_VERSION='m2'
+IDENTITY={}
 def claim_once(worker):
     if TASKS['enabled']:
-        try: return post(BASE,{'action':'claim_task','worker':worker}).get('claim')
+        try: return post(BASE,{'action':'claim_task','worker':worker,**IDENTITY}).get('claim')
         except urllib.error.HTTPError as e:
             if e.code!=400: raise
             TASKS['enabled']=False
@@ -199,6 +202,7 @@ def main():
     import socket,re
     slots=max(1,min(64,int(os.environ.get('CONNECT_SLOTS','1'))))
     base=re.sub(r'[^\w.:-]','-',os.environ.get('CONNECT_WORKER_ID') or f'{socket.gethostname()}-{os.getpid()}')[:180]
+    IDENTITY.update(agent=base,slots=slots,version=AGENT_VERSION)
     threads=[threading.Thread(target=loop,args=(f'{base}:{i}',),daemon=True) for i in range(slots)]
     for t in threads: t.start()
     for t in threads: t.join()

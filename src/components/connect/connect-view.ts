@@ -94,3 +94,30 @@ export async function saveStreams(actions: Actions, id: string, streams: StreamC
   for (const stream of streams) await actions.configure({ data: { id, stream } });
   return streams.length;
 }
+
+/** An agent counts as online when it claimed (or polled) within this window; agents poll every 10 s. */
+export const AGENT_ONLINE_MS = 2 * 60 * 1000;
+
+/** Per pool: agents online and their slots, and how many connections are assigned to it. */
+export function poolSummary(
+  pools: { id: string }[],
+  workers: { pool_id: string; slots: number | null; last_seen_at: string }[],
+  connections: { pool_id: string | null }[],
+  now = Date.now(),
+) {
+  return new Map(
+    pools.map((p) => {
+      const online = workers.filter(
+        (w) => w.pool_id === p.id && now - Date.parse(w.last_seen_at) <= AGENT_ONLINE_MS,
+      );
+      return [
+        p.id,
+        {
+          agentsOnline: online.length,
+          slotsOnline: online.reduce((n, w) => n + (w.slots ?? 1), 0),
+          connections: connections.filter((c) => c.pool_id === p.id).length,
+        },
+      ];
+    }),
+  );
+}

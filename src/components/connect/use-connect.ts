@@ -9,6 +9,7 @@ import {
   createConnect,
   enqueueConnect,
 } from "@/lib/connect.functions";
+import { assignConnectionPool, createPool, updatePool } from "@/lib/connect-pools.functions";
 import { createSource } from "@/lib/ingest.functions";
 import { PUBLIC_CONFIG_KEYS } from "@/lib/connect-setup";
 
@@ -33,7 +34,7 @@ export function useConnectList() {
         supabase
           .from("connect_connections")
           .select(
-            "id,name,source_id,source_version,credential_ref,enabled,health,interval_minutes,next_run_at,discovered_catalog,created_at",
+            "id,name,source_id,source_version,credential_ref,enabled,health,interval_minutes,next_run_at,discovered_catalog,created_at,organization_id,pool_id,max_parallel_tasks",
           )
           .order("created_at", { ascending: false }),
         supabase
@@ -73,6 +74,25 @@ export function useConnectList() {
     },
   });
 }
+/** Worker pools of the workspaces the user can see, with the agents that last claimed for them. */
+export function usePools() {
+  return useQuery({
+    queryKey: ["connect-pools"],
+    refetchInterval: 10000,
+    queryFn: async () => {
+      const [p, w] = await Promise.all([
+        supabase
+          .from("connect_pools")
+          .select("id,owner_id,organization_id,name,enabled,created_at")
+          .order("created_at"),
+        supabase.from("connect_workers").select("pool_id,agent,version,slots,last_seen_at"),
+      ]);
+      if (p.error || w.error) throw new Error("Worker pools unavailable");
+      return { pools: p.data, workers: w.data };
+    },
+  });
+}
+export type ConnectPools = NonNullable<ReturnType<typeof usePools>["data"]>;
 export type ConnectList = NonNullable<ReturnType<typeof useConnectList>["data"]>;
 export type ConnectConnection = ConnectList["connections"][number];
 export type ConnectRun = ConnectList["runs"][number];
@@ -122,6 +142,9 @@ export function useConnectActions() {
     configure: useServerFn(configureConnect),
     enqueue: useServerFn(enqueueConnect),
     cancel: useServerFn(cancelConnect),
+    createPool: useServerFn(createPool),
+    updatePool: useServerFn(updatePool),
+    assignPool: useServerFn(assignConnectionPool),
   };
   async function run<T>(fn: () => Promise<T>, success?: string): Promise<T | undefined> {
     setBusy(true);
@@ -129,6 +152,7 @@ export function useConnectActions() {
       const out = await fn();
       await qc.invalidateQueries({ queryKey: ["connect-workspace"] });
       await qc.invalidateQueries({ queryKey: ["connect-details"] });
+      await qc.invalidateQueries({ queryKey: ["connect-pools"] });
       if (success) toast.success(success);
       return out;
     } catch (e) {

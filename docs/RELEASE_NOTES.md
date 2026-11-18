@@ -2,7 +2,7 @@
 
 ## Unreleased (next preview)
 
-Demonstrated on a local stack with a two-worker Spark cluster; not hosted or certified.
+Demonstrated on a local stack (Spark items with a two-worker Spark cluster); not hosted or certified.
 
 - **Parquet Bronze parts from Spark:** with `CONNECT_SPARK_OPTIONS` `{"bronze_format": "parquet"}`,
   Spark runs land their Bronze parts as Parquet (layout `meridian-bronze-parquet/1`) instead of
@@ -13,8 +13,20 @@ Demonstrated on a local stack with a two-worker Spark cluster; not hosted or cer
   agent pushes itself are always NDJSON.
 - **Readers accept both formats:** `read_bronze.py` downloads and checks Parquet parts and counts
   over both formats with `--query-count`; the dataset registry records each part's format.
-- **Upgrading:** apply migration 0106 (`20261120000000_0106_bronze_parquet_parts.sql`) and update
-  the Spark image and agents. Without the option, nothing changes.
+- **Worker pools:** a pool is a named group of agents in one workspace with its own token, shown
+  once. Its agents share the work of every connection assigned to it, least recently served
+  connection first, and skip connections another agent is claiming from. Tested with three agents
+  of four slots each draining sync runs of 50 connections: every run landed each row once.
+- **Parallel task limit:** each connection can cap how many of its tasks run at once on all agents,
+  to protect its source. The default is no limit.
+- **Pool boundaries:** a pool only serves connections of its own workspace, and no two of its
+  connections may share a credential file. Disabling a pool or issuing a new token cuts off its
+  agents at once; each connection's own token keeps working.
+- **Connect UI:** a Worker pools panel (create, enable or disable, new token, agents online and
+  slots) and a pool choice and limit in each connection's settings.
+- **Upgrading:** apply migrations 0106 (`20261120000000_0106_bronze_parquet_parts.sql`) and 0108
+  (`20261121000000_0108_connect_worker_pools.sql`), and update the Spark image and agents. Without
+  the Parquet option or a pool, nothing changes.
 
 ## Meridian Community Preview 0.3
 

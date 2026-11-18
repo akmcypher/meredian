@@ -45,6 +45,12 @@ DO $$ DECLARE fn text; BEGIN
  IF has_function_privilege('authenticated','public.connect_split_task(uuid,uuid,text[])','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: connect_split_task(uuid,uuid,text[])'; END IF;
  IF has_function_privilege('anon','public.connect_record_lag(uuid,uuid,uuid,jsonb)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: connect_record_lag'; END IF;
  IF has_function_privilege('authenticated','public.connect_record_lag(uuid,uuid,uuid,jsonb)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: connect_record_lag'; END IF;
+ IF has_function_privilege('anon','public.connect_claim_pool_task(uuid,text,text,integer,text)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: connect_claim_pool_task'; END IF;
+ IF has_function_privilege('authenticated','public.connect_claim_pool_task(uuid,text,text,integer,text)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: connect_claim_pool_task'; END IF;
+ IF has_function_privilege('anon','public.connect_running_tasks(uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: connect_running_tasks'; END IF;
+ IF has_function_privilege('authenticated','public.connect_running_tasks(uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: connect_running_tasks'; END IF;
+ IF has_function_privilege('anon','public.connect_pool_assignment_check()','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: connect_pool_assignment_check'; END IF;
+ IF has_function_privilege('authenticated','public.connect_pool_assignment_check()','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: connect_pool_assignment_check'; END IF;
  IF has_function_privilege('anon','public.connect_lease_valid(public.connect_runs,uuid,uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: connect_lease_valid(public.connect_runs,uuid,uuid)'; END IF;
  IF has_function_privilege('authenticated','public.connect_lease_valid(public.connect_runs,uuid,uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected authenticated execute: connect_lease_valid(public.connect_runs,uuid,uuid)'; END IF;
  IF has_function_privilege('anon','public.connect_commit(uuid,uuid,uuid,integer,uuid,text,text,integer,integer,jsonb,boolean)','EXECUTE') THEN RAISE EXCEPTION 'Unexpected anon execute: connect_commit(uuid,uuid,uuid,integer,uuid,text,text,integer,integer,jsonb,boolean)'; END IF;
