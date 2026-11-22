@@ -26,6 +26,7 @@ import { Route as AccountRecoveryRouteImport } from './routes/account_.recovery'
 import { Route as AuthCallbackRouteImport } from './routes/auth_.callback'
 import { Route as AuthenticatedIngestConnectorsRouteImport } from './routes/_authenticated/ingest_.connectors'
 import { Route as ApiPublicConnectAgentRouteImport } from './routes/api/public/connect-agent'
+import { Route as ApiPublicConnectTickRouteImport } from './routes/api/public/connect-tick'
 import { Route as ApiPublicIngestRouteImport } from './routes/api/public/ingest'
 import { Route as ApiPublicIngestPartitionRouteImport } from './routes/api/public/ingest-partition'
 import { Route as ApiPublicServeManifestRouteImport } from './routes/api/public/serve-manifest'
@@ -116,6 +117,11 @@ const ApiPublicConnectAgentRoute = ApiPublicConnectAgentRouteImport.update({
   path: '/api/public/connect-agent',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicConnectTickRoute = ApiPublicConnectTickRouteImport.update({
+  id: '/api/public/connect-tick',
+  path: '/api/public/connect-tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicIngestRoute = ApiPublicIngestRouteImport.update({
   id: '/api/public/ingest',
   path: '/api/public/ingest',
@@ -150,6 +156,7 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/ingest/connectors': typeof AuthenticatedIngestConnectorsRoute
   '/api/public/connect-agent': typeof ApiPublicConnectAgentRoute
+  '/api/public/connect-tick': typeof ApiPublicConnectTickRoute
   '/api/public/ingest': typeof ApiPublicIngestRoute
   '/api/public/ingest-partition': typeof ApiPublicIngestPartitionRoute
   '/api/public/serve-manifest': typeof ApiPublicServeManifestRoute
@@ -171,6 +178,7 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/ingest/connectors': typeof AuthenticatedIngestConnectorsRoute
   '/api/public/connect-agent': typeof ApiPublicConnectAgentRoute
+  '/api/public/connect-tick': typeof ApiPublicConnectTickRoute
   '/api/public/ingest': typeof ApiPublicIngestRoute
   '/api/public/ingest-partition': typeof ApiPublicIngestPartitionRoute
   '/api/public/serve-manifest': typeof ApiPublicServeManifestRoute
@@ -194,6 +202,7 @@ export interface FileRoutesById {
   '/auth_/callback': typeof AuthCallbackRoute
   '/_authenticated/ingest_/connectors': typeof AuthenticatedIngestConnectorsRoute
   '/api/public/connect-agent': typeof ApiPublicConnectAgentRoute
+  '/api/public/connect-tick': typeof ApiPublicConnectTickRoute
   '/api/public/ingest': typeof ApiPublicIngestRoute
   '/api/public/ingest-partition': typeof ApiPublicIngestPartitionRoute
   '/api/public/serve-manifest': typeof ApiPublicServeManifestRoute
@@ -217,6 +226,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/ingest/connectors'
     | '/api/public/connect-agent'
+    | '/api/public/connect-tick'
     | '/api/public/ingest'
     | '/api/public/ingest-partition'
     | '/api/public/serve-manifest'
@@ -238,6 +248,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/ingest/connectors'
     | '/api/public/connect-agent'
+    | '/api/public/connect-tick'
     | '/api/public/ingest'
     | '/api/public/ingest-partition'
     | '/api/public/serve-manifest'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/auth_/callback'
     | '/_authenticated/ingest_/connectors'
     | '/api/public/connect-agent'
+    | '/api/public/connect-tick'
     | '/api/public/ingest'
     | '/api/public/ingest-partition'
     | '/api/public/serve-manifest'
@@ -273,6 +285,7 @@ export interface RootRouteChildren {
   AccountRecoveryRoute: typeof AccountRecoveryRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   ApiPublicConnectAgentRoute: typeof ApiPublicConnectAgentRoute
+  ApiPublicConnectTickRoute: typeof ApiPublicConnectTickRoute
   ApiPublicIngestRoute: typeof ApiPublicIngestRoute
   ApiPublicIngestPartitionRoute: typeof ApiPublicIngestPartitionRoute
   ApiPublicServeManifestRoute: typeof ApiPublicServeManifestRoute
@@ -399,6 +412,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicConnectAgentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/connect-tick': {
+      id: '/api/public/connect-tick'
+      path: '/api/public/connect-tick'
+      fullPath: '/api/public/connect-tick'
+      preLoaderRoute: typeof ApiPublicConnectTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ingest': {
       id: '/api/public/ingest'
       path: '/api/public/ingest'
@@ -460,6 +480,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRecoveryRoute: AccountRecoveryRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   ApiPublicConnectAgentRoute: ApiPublicConnectAgentRoute,
+  ApiPublicConnectTickRoute: ApiPublicConnectTickRoute,
   ApiPublicIngestRoute: ApiPublicIngestRoute,
   ApiPublicIngestPartitionRoute: ApiPublicIngestPartitionRoute,
   ApiPublicServeManifestRoute: ApiPublicServeManifestRoute,

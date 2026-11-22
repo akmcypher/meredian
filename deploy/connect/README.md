@@ -68,7 +68,7 @@ A **worker pool** (migration 0108) lets several agents share the work of many co
 - **Claiming:** a pool agent's claim tries the pool's connections least recently served first, so one large backfill cannot starve the others. A connection another agent is claiming from at that moment is skipped (`FOR UPDATE SKIP LOCKED`), so agents never wait on one another. Each try is the connection's own task claim, with every check it makes; the claim names its connection, and every later call (heartbeat, commit, finish) must be for a run of a connection still in the pool.
 - **Workspace boundary:** a pool serves connections of its own workspace only: the same organization, or, for personal connections, the same owner. The database refuses any other assignment, and a pool token never claims, heartbeats or commits for another workspace. Disabling a pool or issuing a new token stops agents holding the old token at once.
 - **Credentials:** pool agents read `CONNECT_SECRET_DIR/<credential_ref>.json` like any agent, so every host in a pool needs the credential files of all the pool's connections, and `credential_ref` must be unique within a pool (enforced). The assignment is the trust boundary: assign a connection only to a pool whose hosts may hold its credentials.
-- **Limits:** a connection's *parallel tasks limit* (`max_parallel_tasks`, 1–64; empty = no limit) caps its running tasks across all agents, pool or source token, to protect a source database.
+- **Limits:** a connection's _parallel tasks limit_ (`max_parallel_tasks`, 1–64; empty = no limit) caps its running tasks across all agents, pool or source token, to protect a source database.
 - **Workers:** agents report their id, slot count and version with each claim; the pool list shows agents seen in the last two minutes and their slots.
 - A connection's own source token keeps working whether or not the connection is in a pool.
 
@@ -81,7 +81,7 @@ A `postgres-cdc-v1` connection reads PostgreSQL logical replication (`source_pos
 - **Later runs:** the actor moves the slot to the checkpoint (the end LSN of the last landed transaction), then reads `pgoutput` with `pg_logical_slot_peek_binary_changes` up to the WAL position at the start of the run (at most 100,000 changes per run). Inserts and updates land as `upsert` with the whole row, deletes as `delete` with the key (the whole old row with `REPLICA IDENTITY FULL`), and a changed key as a delete of the old key and an upsert of the new one. Values are decoded with psycopg's own type loaders, so a changed row lands with the same `data` as the copy.
 - **Exactly-once landing:** the slot is only peeked, never consumed, and moves only to a landed checkpoint, so an attempt that dies before committing loses nothing. Checkpoints fall on transaction boundaries about every 500 records; a crash inside a larger transaction re-lands part of it (at-least-once, like segmented commits elsewhere).
 - **Fails closed:** a column change (`schema_drift`), an update that sends an unchanged TOAST value when the table lacks `REPLICA IDENTITY FULL` (`schema_drift`, log `cdc_unchanged_value` with the columns), `TRUNCATE` (`source_changed`, log `cdc_truncate`) and a missing slot (`offset_out_of_range`, log `cdc_slot_missing`). A reset drops the slot, starts a new one and copies the table again.
-- **Source safety:** a slot keeps WAL until it moves, so a paused or stopped stream holds WAL on the source. After each run the actor reports how many bytes of log the landed position is behind (`connect_partition_lag`, partition 0), and the stream view shows it with the slot name. Set `max_slot_wal_keep_size` as a backstop. Streams and connections cannot be deleted in the app today; to retire a CDC stream for good, drop its slot on the source: `SELECT pg_drop_replication_slot('meridian_...');` (a reset also drops and recreates it).
+- **Source safety:** a slot keeps WAL until it moves, so a paused or stopped stream holds WAL on the source. After each run the actor reports how many bytes of log the landed position is behind (`connect_partition_lag`, partition 0), and the stream view shows it with the slot name. Set `max_slot_wal_keep_size` as a backstop. Use Retire on the stream to fence future ingestion and queue worker-local slot cleanup; keep its connection and worker enabled until cleanup reports done. Retirement preserves Bronze history. A reset drops and recreates the slot.
 - **In the app:** the new-connection wizard offers "Read changes from the database log (CDC)" for PostgreSQL (with the publication name) and MySQL; streams of a CDC connection are saved in mode `cdc`, labelled "Change data capture", and their lag is shown in bytes.
 
 **MySQL (`mysql-cdc-v1`, `source_mysql_cdc.py`)** reads the binlog as a replica with `python-mysql-replication` (Apache-2.0).
@@ -128,7 +128,201 @@ The local cluster is secured: a one-shot `spark-secret` service creates a random
 - Before registering a part, the server decodes it and checks every envelope exactly as for NDJSON (`src/lib/bronze-parquet.ts`). The object key ends in `landing.parquet`, and the dataset version records format `parquet` (migration 0106).
 - Readers accept both formats: `read_bronze.py` (downloads `.parquet` files, checks their run and stream, and counts over both formats with `--query-count`) and the test harness. Parts are still at most 8 MiB and 10,000 records, measured on the NDJSON size.
 
-Not yet: Avro and ADLS files, incremental files, the Spark Operator (S5b uses plain client mode).
+**Avro and ADLS files.** `format: avro` reads Avro object-container files using the
+existing fastavro dependency, split by container blocks with stable global row
+positions. It shares standalone full-refresh/incremental parsing and Spark
+full-refresh/incremental execution. For ADLS use `provider: adls`, `account_name`, and `bucket`
+as the container, with worker-local `account_key`, `sas_token`, or service-principal
+`tenant_id`, `client_id`, `client_secret`. Credentials never enter the checkpoint.
+Saved Spark plans now bind source location/provider/account before reuse. Legacy
+ADLS plans without a binding require reset. Live Azure authentication/list/read remains unverified without a test account.
+Distributed Avro and incremental S3 checks passed locally in `connect-spark-s3.e2e.test.ts`;
+offline ADLS tests use local files and controlled SDK wiring.
+
+**Kafka group membership.** Set worker-local `consumer_group: true` and `group_id`
+on `kafka-v1`. The agent uses one unsplit whole-topic task with real subscription,
+assigning from authoritative Postgres offsets; broker offset storage/commits stay
+disabled. Only a complete initial topic assignment is supported. Revoke/lost,
+partial or repeated assignment stops the attempt before another checkpoint; retry
+loads committed positions. This first mode supports one full-topic member, not
+multi-member partition sharing. Changing mode on an already-split run requires
+cancelling it and starting a new run. Spark group mode is refused. Local three-broker tests verify assignment loss, partial assignment, replay and
+broker-offset override. `connect-kafka-groups.e2e.test.ts` exercises actual Bronze
+commits and restart. Slow-destination/max-poll and managed-broker checks remain pending.
+
+**Retire streams.** Streams now offer retirement and retry source cleanup. Stop
+active runs first and wait 90 seconds after the last worker run for its watchdog
+to stop source work. The stream is disabled and generation-fenced, preserving all
+Bronze history. PostgreSQL CDC queues worker-local cleanup of its deterministic
+pgoutput slot; missing slots are success, busy slots retry. Updated CDC actors use
+source-side advisory exclusion for reads/cleanup. Upgrade all workers before using
+retirement. Keep the connection/source/worker enabled until cleanup reports done.
+MySQL has no persistent replication slot, so retirement needs no source cleanup.
+Retired stream names cannot be reconfigured or resumed; use a new connection if
+you need to ingest the same name afresh. Migration 0109 adds the owner RPC and guard.
+
+**Durable schedules.** Migration 0110 moves due-run creation out of agent polling.
+Configure a trusted external cron to POST `/api/public/connect-tick` with bearer
+`CRON_SECRET`. Scheduling
+works without online workers, coalesces missed intervals, snapshots enabled streams
+and skips connections with active runs. Workers claim persisted runs as before.
+An installation without a configured cron can still use manual Sync; agent polling
+alone no longer triggers schedules. Local database concurrency/workspace checks passed, including concurrent ticks,
+manual enqueue races and suspended workspace suppression. These are local checks;
+external cron deployment remains an installation step.
+
+Not yet: the Spark Operator (S5b uses plain client mode). None of the new offline evidence is hosted
+certification.
+
+### Shared Kafka groups across agents
+
+Set `CONNECT_KAFKA_SHARED=1` on each agent for one `kafka-v1` connection. Its local
+credential file must set `consumer_group: true` and the same `group_id` on every
+member. Use a dedicated group for that connection; unrelated consumers can hold
+partitions that Meridian then waits for. Connection tokens select their own
+connection. Pool tokens additionally require `CONNECT_GROUP_CONNECTION_ID` naming
+a connection assigned to the pool. `CONNECT_SLOTS` bounds active partition actors
+per agent; existing pool quotas and worker heartbeats still apply.
+
+One membership consumer joins all configured topics, immediately pauses assigned
+partitions and polls on its own thread while actors read and land data. Only its
+assigned partitions can be leased. Each actor reads explicit Postgres positions
+with broker membership disabled. Neither consumer commits broker offsets, and
+preexisting broker commits do not replace landed Bronze checkpoints. Kafka must
+permit group membership and topic metadata/read access. The assignment selector
+is capped at 1024 partitions per stream and 48 KiB serialized JSON.
+
+Revocation cancels affected actors and fences/requeues their task leases. A commit
+that wins before fencing remains authoritative; a later stale commit is rejected.
+Rebalance handoffs preserve the source-failure retry budget. After process death,
+the survivor waits for broker reassignment and the existing 90-second database
+lease to expire before continuing from landed positions. `CONNECT_ONCE=1` waits
+for the whole active run, including work held by peers, before closing membership.
+
+Start sharing on a new run. Cancel an in-flight legacy whole-topic group run
+before switching modes; it cannot be converted after it has started reading.
+All agents serving this connection must use sharing consistently. Spark group
+sharing is unsupported. Existing single-agent whole-topic group mode continues
+when `CONNECT_KAFKA_SHARED` is unset. Worker tests are in `test_kafka_shared.py`,
+scoping/fencing tests in `connect-shared-kafka-*.test.ts`, and actual two-agent
+tests in `connect-kafka-shared.e2e.test.ts`; see the dated plan for executed results.
+
+### Avro registry schema evolution on Kafka and Spark
+
+Both `kafka-v1` (including shared groups) and `spark-kafka-v1` use the same Avro
+decoder. Each Confluent-wire record identifies its immutable writer schema ID.
+Automatic mode reads each writer's shape, including new fields as producers evolve
+schemas. Referenced Avro records/enums/fixed types resolve through the registry's
+exact subject/version links, including nested references. Cycles, mismatched names
+and conflicting definitions fail safely instead of silently changing decoded data.
+The registry must implement Confluent-compatible Avro reference endpoints; the
+local Karapace 5 fixture rejects Avro references, while the optional Apicurio fixture
+in `certify-registry.compose.yml` exercises that path.
+
+In Connect's stream picker, select a registered Avro reader subject to normalize
+older/newer writers to one shape. Saving pins the latest version visible to the
+caller; it does not silently follow later subject changes. Reader defaults,
+aliases and Avro-compatible type promotions apply to both execution paths.
+Changing only the reader preserves committed offsets and does not re-read old
+records. Stop active runs before changing a reader; source/key/cursor/mode changes
+retain their existing checkpoint-reset behavior.
+Automatic writer schemas remain the default. The reader subject is Meridian's
+caller-scoped registered schema; external writer schemas and credentials stay
+on the worker. Producer registration/compatibility policy stays with the external
+registry and producer, and ingestion never auto-approves schema changes.
+
+Incompatible records become `schema_incompatible` dead letters under the existing
+budget, fenced checkpoint and replay rules. Missing writer/reference schemas are
+replayable `schema_not_found` records. Registry outages, authentication failures
+and TLS failures stop extraction instead of acknowledging records as poison.
+Registry redirects are refused, and credentials require HTTPS.
+After correcting the reader, selected dead letters can be replayed without moving
+live partition positions. Spark Kafka reuses the bounded Kafka actor for replay
+and the same fenced commit protocol; replay does not submit a Spark application.
+
+Reference resolution is bounded to depth 32, 128 referenced documents and 4 MiB of
+schema text per writer graph. HTTP responses are capped at 4 MiB; the writer cache
+holds at most 64 IDs/8 MiB of source schema text. Eviction refetches immutable IDs.
+Offline tests: `test_kafka_registry.py`. Actual multi-executor evolution, reader
+pinning, retry and incompatible-record checks: `connect-spark-avro.e2e.test.ts`.
+Locally verified on 2026-11-22: real reference-aware registry actor/chunk test and
+all four two-executor Spark/Bronze tests passed, including replay after a reader
+fix without moving live offsets. Managed registries and production HA remain
+outside this local evidence.
+
+### Incremental object-store files (single worker)
+
+Configure a `files-v1` stream with sync mode `incremental`, discovered key
+`[_file, _position]` and cursor `_modified`. `spark-files-v1` also supports incremental
+streams with the distributed range ledger described below. Incremental files use content identity rather than a modification-time
+watermark, so a new object whose key sorts before earlier objects is still read.
+
+- The worker copies each listed object to a private temporary disk file while
+  computing SHA-256 in bounded chunks, then parses that snapshot. Size and mtime
+  are checked against the listing after the copy. Parsed bytes match the digest;
+  this is not a provider-atomic snapshot of a concurrently changing object.
+  Producers must publish immutable objects.
+- A versioned `files` checkpoint stores a hash of the source location, parsing
+  settings and schema, plus each key's digest, size, original modification time,
+  last committed row position and completion flag. Source credentials stay in
+  the worker's credential file and are excluded from the binding and checkpoint.
+- An unchanged completed object emits no new Bronze rows. An unfinished object
+  with the same digest resumes after its last committed row. Each incremental
+  RECORD is immediately followed by a STATE so it lands atomically with its
+  position, even at the destination's byte/count boundaries. Existing identical
+  sequence retries handle response loss, and existing leases fence stale workers.
+- Different bytes at a known key fail with `source_changed`, including same-size
+  replacements with preserved mtimes. Replacements do not overwrite Bronze or
+  emit implicit deletes. Missing completed objects keep their ledger entries and
+  Bronze history; missing unfinished objects fail closed. Reappearing identical
+  objects are skipped; reappearing replacements fail.
+- Reset/backfill explicitly re-reads all currently present objects and builds a
+  fresh ledger; it does not remove historical Bronze. Reset is also required when
+  switching from a legacy full-refresh checkpoint or changing the source binding.
+- The ledger is capped at 48 KiB serialized JSON. Exceeding it fails with
+  `record_too_large` before rows for the unrepresentable object are emitted;
+  a checkpoint never silently drops identities. This first slice is for small
+  object sets: it hashes all listed objects on every run, needs temporary disk
+  space for the largest object and commits once per row. A scalable object ledger
+  and batched row checkpoints remain follow-up work.
+
+Offline verification lives in `deploy/connect/test_files.py`, `test_destination.py`
+and `test_agent.py`, plus the control-plane protocol tests. Live S3 and database recovery checks are in `connect-spark-s3.e2e.test.ts`,
+`connect-retirement-agent.e2e.test.ts` and the task-lease regression suites.
+See the dated implementation plan for executed results and remaining gaps.
+
+### Incremental object-store files on Spark
+
+Use `spark-files-v1` with sync mode `incremental`. New immutable objects are split
+through the same CSV/TSV/JSONL byte, Parquet row-group and Avro block planner as
+full refresh. Quoted-newline CSV/TSV remains one range per file. The driver hashes
+bounded disk snapshots, and each executor verifies the expected digest against its
+own disk snapshot before parsing or uploading. Source credentials remain local to
+the worker/secured Spark task transport; they never enter checkpoints.
+
+Version-2 `files` state stores completed object identities and only unfinished
+ranges with their committed row offsets. Every accepted Bronze part advances that
+ledger under the existing task lease. Retried attempts and new runs after a partial
+cancel retain exact unfinished boundaries, including ranges committed out of order.
+Unchanged objects produce no rows; late keys are read. Missing completed objects
+are remembered; missing unfinished objects and changed known bytes fail closed.
+Reset/backfill rebuild the configured mode. Entering Spark incremental from a
+standalone version-1 ledger or a legacy full-refresh checkpoint requires an
+explicit reset. Configured full refresh continues to reload current objects each
+run, including the first sync after reset/backfill.
+
+This first implementation hashes every listed object each sync and snapshots a
+whole object on each range's executor. Temporary disk must fit that object; memory
+is bounded by copy/parse/upload budgets. Entire serialized incremental state is
+capped at 48 KiB, with at most 4096 unfinished ranges; exceeding either limit fails
+rather than forgetting identities. A scalable external object ledger and shared
+executor snapshots remain follow-up work. This is append-only Bronze ingestion,
+not file replacement/upsert/delete application.
+
+Offline recovery tests: `test_spark_files_incremental.py`; concurrent publication
+failure regression: `test_spark_commit.py`. The secured two-worker S3 demonstration
+is `src/test/connect-spark-incremental.e2e.test.ts`. Dated executed evidence is in
+the implementation plan; runnable or skipped tests are not live certification.
 
 ## Guarantees / gaps
 

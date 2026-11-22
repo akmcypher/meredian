@@ -23,6 +23,19 @@ def slot_name(stream):
     """Recognisable and stable per stream; slot names allow [a-z0-9_], at most 63 bytes."""
     return 'meridian_'+hashlib.sha256(stream['id'].encode()).hexdigest()[:24]
 
+def source_lock(admin, stream):
+    # Session lock spans the actor's entire source operation and dies with its connection.
+    if not admin.execute('SELECT pg_try_advisory_lock(hashtextextended(%s,0)) AS acquired',[slot_name(stream)]).fetchone()['acquired']:
+        raise Stop('source_unavailable','cdc_stream_busy')
+
+def cleanup(admin, stream):
+    source_lock(admin,stream)
+    slot=slot_name(stream)
+    row=admin.execute('SELECT slot_name,plugin,active FROM pg_replication_slots WHERE slot_name=%s AND database=current_database()',[slot]).fetchone()
+    if row is None: return
+    if row['plugin']!='pgoutput' or row['active']: raise Stop('source_unavailable','cdc_cleanup_slot_busy')
+    admin.execute('SELECT pg_drop_replication_slot(%s)',[slot])
+
 class Reader:
     def __init__(self, data): self.b=bytes(data); self.i=0
     def take(self, fmt):
@@ -97,6 +110,7 @@ def prerequisites(conn, publication):
         raise Stop('connector_failed','cdc_publication_missing',publication=publication)
 
 def read(conn, admin, stream, checkpoint, publication, max_changes=100000):
+    source_lock(admin,stream)
     if stream['sync_mode'] not in ('cdc','full_refresh'): raise Stop('connector_failed','cdc_stream_mode',sync_mode=stream['sync_mode'])
     found=next((s for s in source_postgres.discover(conn) if s['namespace']==stream['namespace'] and s['name']==stream['name']),None)
     if not found or found['json_schema']!=stream['schema']: raise ValueError('schema_drift')
@@ -199,7 +213,10 @@ def main():
         config=load(a.config); publication=config.pop('publication',None) or 'meridian'
         with source_postgres.connection(config) as conn, connect(**config,row_factory=dict_row,connect_timeout=10,autocommit=True) as admin:
             conn.execute("SET statement_timeout='60s'"); conn.commit()
-            if a.command=='check': prerequisites(conn,publication); emit('CONNECTION_STATUS',connectionStatus={'status':'SUCCEEDED'})
+            if a.command=='cleanup':
+                cleanup(admin,load(a.catalog))
+                emit('STATE',state={**load(a.state),'version':1,'completed':True,'retirement':{'status':'done'}})
+            elif a.command=='check': prerequisites(conn,publication); emit('CONNECTION_STATUS',connectionStatus={'status':'SUCCEEDED'})
             elif a.command=='discover': emit('CATALOG',catalog={'streams':source_postgres.discover(conn)})
             elif a.command=='read':
                 for m in read(conn,admin,load(a.catalog),load(a.state),publication): print(json.dumps(m),flush=True)

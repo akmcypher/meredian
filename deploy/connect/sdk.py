@@ -5,7 +5,7 @@ DEAD_LETTER_CODES = {'deserialization_failed','schema_not_found','schema_incompa
 def emit(kind, **payload):
     print(json.dumps({'type': kind, **payload}, separators=(',', ':'), default=str), flush=True)
 def arguments():
-    p=argparse.ArgumentParser(); p.add_argument('command',choices=['spec','check','discover','plan','read','replay','write','health']); p.add_argument('--config'); p.add_argument('--catalog'); p.add_argument('--state'); return p.parse_args()
+    p=argparse.ArgumentParser(); p.add_argument('command',choices=['spec','check','discover','plan','read','replay','write','health','cleanup']); p.add_argument('--config'); p.add_argument('--catalog'); p.add_argument('--state'); return p.parse_args()
 def load(path):
     if not path: return {}
     with open(path) as f: return json.load(f)

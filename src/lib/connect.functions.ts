@@ -179,3 +179,12 @@ export const cancelConnect = createServerFn({ method: "POST" })
     if (r.error) throw new Error("Cancellation failed");
     return { cancelled: r.data };
   });
+
+export const retireConnectStream = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((v: unknown) => z.object({ id: z.string().uuid() }).parse(v))
+  .handler(async ({ context, data }) => {
+    const r = await context.supabase.rpc("connect_retire_stream", { _stream: data.id });
+    if (r.error) throw new Error(r.error.message);
+    return { cleanupRun: r.data };
+  });

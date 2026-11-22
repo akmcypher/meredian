@@ -10,12 +10,37 @@ type ReplayClaim = {
   run_id: string;
   lease_token: string;
   operation: string;
+  source_version?: string;
   streams: {
     id: string;
+    configured_sync_mode?: "full_refresh" | "incremental";
     dead_letters?: { id: string; position: string; object_key: string; line: number }[] | null;
     deferred?: number;
   }[];
 };
+// Reset/backfill dispatch full-refresh work, but Spark files must retain the
+// configured mode when deciding which durable checkpoint layout to rebuild.
+export async function hydrateFileResetModes(claim: ReplayClaim, db: SupabaseClient) {
+  if (claim.source_version !== "spark-files-v1" || !["reset", "backfill"].includes(claim.operation))
+    return claim;
+  const modes = await db
+    .from("connect_streams")
+    .select("id,sync_mode")
+    .in(
+      "id",
+      claim.streams.map((stream) => stream.id),
+    );
+  if (modes.error) throw modes.error;
+  const byId = new Map((modes.data ?? []).map((stream) => [stream.id, stream.sync_mode]));
+  for (const stream of claim.streams) {
+    const mode = byId.get(stream.id);
+    if (mode !== "full_refresh" && mode !== "incremental")
+      throw new Error("stream_mode_unavailable");
+    stream.configured_sync_mode = mode;
+  }
+  return claim;
+}
+
 const REPLAY_BUDGET = 48 * 1024 * 1024;
 // Keep replay hydration in the agent boundary; payloads never become database rows.
 export async function hydrateReplayClaim(
@@ -278,6 +303,8 @@ export async function handleConnectAgent(request: Request) {
   const data = parsed.data;
   let scope: { owner_id: string; organization_id: string | null };
   let c;
+  let poolId: string | undefined;
+  const sharedDb: SupabaseClient = db;
   if (isPool) {
     const pool = await db
       .from("connect_pools")
@@ -298,22 +325,33 @@ export async function handleConnectAgent(request: Request) {
         });
         if (r.error) throw r.error;
         const claim = r.data as ReplayClaim | null;
+        if (claim) await hydrateFileResetModes(claim, db);
         if (claim?.operation === "replay") await hydrateReplayClaim(claim, db);
         return Response.json({ claim });
       } catch {
         return Response.json({ error: "operation_rejected", retryable: false }, { status: 409 });
       }
     }
+    poolId = pool.data.id;
+    // Shared metadata/claims select a single assigned connection, never an arbitrary pool source.
+    const shared = data.action === "group_context" || data.action === "claim_group_task";
+    if (shared && !data.connectionId)
+      return Response.json({ error: "connection_required" }, { status: 400 });
     // Every other call names a run: its connection must be assigned to this pool, in its workspace.
     const owner = await db
       .from("connect_runs")
       .select("connection_id")
-      .eq("id", data.runId)
+      .eq("id", "runId" in data ? data.runId : "00000000-0000-0000-0000-000000000000")
       .maybeSingle();
     c = await db
       .from("connect_connections")
       .select("*")
-      .eq("id", owner.data?.connection_id ?? "00000000-0000-0000-0000-000000000000")
+      .eq(
+        "id",
+        shared
+          ? data.connectionId!
+          : (owner.data?.connection_id ?? "00000000-0000-0000-0000-000000000000"),
+      )
       .eq("pool_id", pool.data.id)
       .maybeSingle();
     if (!c.data) return Response.json({ error: "stale_attempt" }, { status: 409 });
@@ -345,7 +383,48 @@ export async function handleConnectAgent(request: Request) {
       .maybeSingle();
     if (member.error || !member.data) return Response.json({ error: "forbidden" }, { status: 403 });
   }
+  if (
+    (data.action === "group_context" || data.action === "claim_group_task") &&
+    data.connectionId &&
+    data.connectionId !== c.data.id
+  )
+    return Response.json({ error: "scope_mismatch" }, { status: 403 });
+  if (
+    (data.action === "group_context" ||
+      data.action === "claim_group_task" ||
+      data.action === "abandon_task") &&
+    c.data.source_version !== "kafka-v1"
+  )
+    return Response.json({ error: "shared_kafka_required" }, { status: 403 });
   try {
+    if (data.action === "group_context") {
+      const r = await sharedDb.rpc("connect_group_context", {
+        _connection: c.data.id,
+        ...(poolId ? { _pool: poolId } : {}),
+      });
+      if (r.error) throw r.error;
+      return Response.json({ context: r.data });
+    }
+    if (data.action === "claim_group_task") {
+      const args = {
+        _connection: c.data.id,
+        _assignments: data.assignments,
+        ...(data.worker ? { _worker: data.worker } : {}),
+      };
+      const r = poolId
+        ? await sharedDb.rpc("connect_claim_pool_group_task", {
+            ...args,
+            _pool: poolId,
+            ...(data.agent ? { _agent: data.agent } : {}),
+            ...(data.slots ? { _slots: data.slots } : {}),
+            ...(data.version ? { _version: data.version } : {}),
+          })
+        : await sharedDb.rpc("connect_claim_selected_task", args);
+      if (r.error) throw r.error;
+      const claim = r.data as ReplayClaim | null;
+      if (claim?.operation === "replay") await hydrateReplayClaim(claim, db);
+      return Response.json({ claim });
+    }
     if (data.action === "claim" || data.action === "claim_task") {
       const r =
         data.action === "claim"
@@ -360,6 +439,7 @@ export async function handleConnectAgent(request: Request) {
       // Payloads are inlined up to REPLAY_BUDGET bytes per claim. Letters beyond it are released
       // from this replay (still open, selectable again) and counted as deferred, so the run
       // reports replay_incomplete instead of holding gigabytes in one response.
+      if (claim) await hydrateFileResetModes(claim, db);
       if (claim?.operation === "replay") await hydrateReplayClaim(claim, db);
       return Response.json({ claim });
     }
@@ -378,6 +458,14 @@ export async function handleConnectAgent(request: Request) {
     });
     if (!run.data || run.data.status !== "running" || lease.error || lease.data !== true)
       return Response.json({ error: "stale_attempt" }, { status: 409 });
+    if (data.action === "abandon_task") {
+      const r = await sharedDb.rpc("connect_abandon_task", {
+        _run: data.runId,
+        _token: data.token,
+      });
+      if (r.error) throw r.error;
+      return Response.json({ ok: true });
+    }
     if (data.action === "heartbeat") {
       const r = await db.rpc("connect_heartbeat", { _run: data.runId, _token: data.token });
       if (r.error || !r.data) throw new Error("stale_attempt");

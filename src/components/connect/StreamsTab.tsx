@@ -16,10 +16,31 @@ export function StreamsTab({
   actions: Actions;
 }) {
   const [adding, setAdding] = useState(false);
-  const kafka = c.source_version.startsWith("kafka");
+  const kafka = /^(spark-)?kafka-v[0-9]+$/.test(c.source_version);
   const cdc = isCdc(c.source_version);
   const catalog = readCatalog(c.discovered_catalog);
   const streams = details?.streams ?? [];
+  const retire = (id: string) =>
+    void actions.run(
+      () => actions.retireStream({ data: { id } }),
+      "Stream retired; CDC cleanup queued if needed",
+    );
+  const retirementButton = (s: (typeof streams)[number]) => {
+    const status = (s.state as { retirement?: { status?: string } } | null)?.retirement?.status;
+    return status === "done" ? (
+      <span className="ml-2 text-muted-foreground">Retired</span>
+    ) : (
+      <Button
+        className="ml-2"
+        variant="outline"
+        size="sm"
+        disabled={actions.busy}
+        onClick={() => retire(s.id)}
+      >
+        {status === "pending" ? "Retry source cleanup" : "Retire stream"}
+      </Button>
+    );
+  };
   return (
     <div className="space-y-4">
       {streams.length === 0 && (
@@ -47,6 +68,7 @@ export function StreamsTab({
                   </>
                 ) : null}{" "}
                 · last commit {relativeTime(s.last_success_at)}
+                {retirementButton(s)}
                 {total !== null && (
                   <span className="text-muted-foreground">
                     {" "}
@@ -64,6 +86,7 @@ export function StreamsTab({
               <strong>{streamKey(s)}</strong> ·{" "}
               {s.sync_mode === "full_refresh" ? "Full refresh" : "Incremental"} · cursor{" "}
               <code>{s.cursor_field}</code> · last commit {relativeTime(s.last_success_at)}
+              {retirementButton(s)}
               {total !== null && (
                 <span className="text-muted-foreground">
                   {" "}
@@ -81,6 +104,7 @@ export function StreamsTab({
       {adding ? (
         <div className="space-y-2">
           <StreamPicker
+            key={c.id}
             catalog={catalog}
             kafka={kafka}
             cdc={cdc}

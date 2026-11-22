@@ -9,6 +9,7 @@
 # spark-defaults.conf (spark/secure-conf.sh); spark-submit run inside the master container
 # (docker exec) uses the same file. An application without the secret cannot register.
 x-spark: &spark
+  init: true
   build: { context: ., dockerfile: Dockerfile }
   image: meridian-spark-ingest:local
   volumes: ["..:/opt/meridian/connect:ro", "spark-secret:/run/meridian-spark:ro"]
@@ -17,6 +18,7 @@ x-spark: &spark
     PYTHONPATH: /opt/meridian/connect
     SPARK_NO_DAEMONIZE: "true"
     SPARK_CONF_DIR: /tmp/spark-conf
+    SPARK_DAEMON_MEMORY: 256m
 services:
   spark-secret:
     build: { context: ., dockerfile: Dockerfile }
@@ -40,7 +42,7 @@ services:
         "--host",
         "spark-master",
       ]
-    ports: ["127.0.0.1:38080:8080"]
+    ports: ["127.0.0.1:${SPARK_TEST_UI_PORT:-38080}:8080"]
     healthcheck:
       test:
         [

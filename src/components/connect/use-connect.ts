@@ -8,6 +8,7 @@ import {
   configureConnect,
   createConnect,
   enqueueConnect,
+  retireConnectStream,
 } from "@/lib/connect.functions";
 import { assignConnectionPool, createPool, updatePool } from "@/lib/connect-pools.functions";
 import { createSource } from "@/lib/ingest.functions";
@@ -142,6 +143,7 @@ export function useConnectActions() {
     configure: useServerFn(configureConnect),
     enqueue: useServerFn(enqueueConnect),
     cancel: useServerFn(cancelConnect),
+    retireStream: useServerFn(retireConnectStream),
     createPool: useServerFn(createPool),
     updatePool: useServerFn(updatePool),
     assignPool: useServerFn(assignConnectionPool),

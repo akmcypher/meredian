@@ -185,6 +185,7 @@ export function NewConnectionWizard({
       )}
       {step === "streams" && connectionId && (
         <StreamPicker
+          key={connectionId}
           catalog={readCatalog(connection?.discovered_catalog)}
           kafka={setup.kind === "kafka"}
           cdc={setup.cdc && setup.kind !== "kafka"}

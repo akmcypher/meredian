@@ -20,7 +20,7 @@ tests; none of it is hosted or production-certified. See [known limitations](#kn
 | PostgreSQL CDC (`postgres-cdc-v1`)                                                | Connect agent, logical replication                                | Every insert, update and delete, in commit order, after a first full copy                                |
 | MySQL CDC (`mysql-cdc-v1`)                                                        | Connect agent, binlog                                             | Every insert, update and delete, in commit order, after a first full copy                                |
 | Kafka (`kafka-v1`)                                                                | Connect agent, one task per partition                             | JSON, Debezium JSON, Confluent wire-format Avro                                                          |
-| Object-store files (`files-v1`)                                                   | Connect agent                                                     | CSV, TSV, JSON Lines and Parquet under an S3-compatible prefix (AWS S3, GCS interoperability, MinIO, R2) |
+| Object-store files (`files-v1`)                                                   | Connect agent                                                     | CSV, TSV, JSON Lines, Parquet and Avro under an S3-compatible prefix (AWS S3, GCS interoperability, MinIO, R2) or ADLS, full refresh or incremental |
 | Spark (`spark-postgres-v1`, `spark-mysql-v1`, `spark-files-v1`, `spark-kafka-v1`) | Spark cluster driven by the Connect agent                         | The same sources, read in parallel across executors                                                      |
 
 Database, Kafka and object-store credentials stay on the agent host; the control plane never
@@ -102,7 +102,11 @@ opens connections into your network.
   an untrusted CA or a hostname mismatch fail as `auth_failed` before reading.
 - Managed-service profiles: Confluent Cloud, Azure Event Hubs, Amazon MSK (SCRAM and IAM),
   Redpanda Cloud and Aiven.
-- Confluent schema registry with Avro, including pinned reader-schema evolution.
+- Confluent schema registry with Avro: writer schemas and their references resolved per record,
+  an optional pinned reader subject, and reader changes that keep committed offsets.
+- Consumer groups: one whole-topic member, or several agents sharing a connection's partitions
+  (`CONNECT_KAFKA_SHARED=1`) with fenced handoffs. Broker offsets are never committed; landed
+  Bronze checkpoints stay authoritative.
 - Tombstones and delete events kept in raw ingestion; dead letters with replay.
 - Retention-gap detection: positions lost to retention stop the run until the owner approves the
   exact gap, recorded in commit history.
@@ -116,7 +120,11 @@ See [Kafka](KAFKA.md).
   is retried on its own.
 - Each commit is durable, idempotent and stores its source checkpoint, so a failed run resumes
   from the last commit without loss or duplicate positions.
-- Schedules: Connect actors run every N minutes through the agent, or from your own scheduler.
+- Durable schedules: a cron calls `/api/public/connect-tick`, which queues due runs without
+  needing an online agent and coalesces missed intervals.
+- Incremental object-store files, single agent or Spark: content-identified objects, resume after
+  the last committed row, and `source_changed` for a replaced object.
+- Stream retirement: fences future ingestion, keeps Bronze history, and drops PostgreSQL CDC slots.
 - Large inputs go through partitioned runs with atomic publication.
 
 ## Bronze output
@@ -151,11 +159,13 @@ connector. See the [connector developer guide](CONNECTOR_DEVELOPER_GUIDE.md).
 
 - The cursor connectors (`postgres-v1`, `mysql-v1`) miss deletes and updates that don't advance
   the cursor; use the CDC connectors for those tables.
-- CDC: a paused PostgreSQL stream keeps its slot and holds WAL on the source (watch the lag; drop
-  the slot to retire a stream). No GTID-based MySQL positions yet.
+- CDC: a paused PostgreSQL stream keeps its slot and holds WAL on the source (watch the lag, or
+  retire the stream to drop the slot). No GTID-based MySQL positions yet.
 - Spark: Bronze parts are NDJSON unless Parquet is turned on. Spark on Kubernetes is tested on a local kind cluster only, in
   client mode (no Spark Operator).
-- Object-store files: full refresh only; no Avro files or ADLS yet.
+- Object-store files: incremental mode needs immutable objects (a changed object stops the run).
+  ADLS is tested with local files only, not a live Azure account.
+- Kafka: Spark does not join consumer groups; shared groups need a dedicated group per connection.
 - Managed Kafka profiles are checked offline and against a local secured broker, not against the
   hosted services.
 - Raw upsert/delete envelopes are kept as-is; no warehouse merge is applied.

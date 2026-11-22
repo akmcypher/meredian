@@ -1,0 +1,17 @@
+# Optional reference-aware registry fixture. Karapace5 supports inline Avro but
+# rejects Avro references; this local-only H2 registry exercises that additional path.
+# docker compose -p meridian-avro -f deploy/connect/certify-registry.compose.yml up -d
+services:
+  registry:
+    image: apicurio/apicurio-registry:3.3.5@sha256:8d34d381de75264c3a56389e5a457cafb566b9a7b994c5308e5951114aeeffc0
+    ports: ["127.0.0.1:38082:8080"]
+    mem_limit: 512m
+    environment:
+      JAVA_MAX_MEM_RATIO: "50"
+    networks:
+      certify:
+        aliases: [avro-registry]
+networks:
+  certify:
+    external: true
+    name: meridian-certify_default
