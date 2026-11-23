@@ -45,10 +45,9 @@ Demonstrated on a local stack (Spark items with a two-worker Spark cluster); not
   `CRON_SECRET`) from your own cron, not by agent polling. Missed intervals are coalesced into one
   run, and connections with an active run are skipped. Manual Sync works without a cron.
 - **Upgrading:** apply migrations 0106, 0108, 0109 (stream retirement), 0110 (scheduler), 0111
-  (shared Kafka), 0112 (Avro reader state) and 0114 (connection lock order), update the agents
-  and the Spark image, and set up a
-  cron for `/api/public/connect-tick` if you use schedules. Without these options, existing
-  connections behave as before.
+  (shared Kafka), 0112 (Avro reader state), 0114 (connection lock order) and 0115 (finish lock
+  order), update the agents and the Spark image, and set up a cron for `/api/public/connect-tick`
+  if you use schedules. Without these options, existing connections behave as before.
 
 ## Meridian Community Preview 0.3
 
