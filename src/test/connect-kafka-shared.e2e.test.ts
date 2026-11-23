@@ -1,6 +1,6 @@
 // @vitest-environment node
 // Real membership, partition actors, fenced task leases and Bronze; no Docker lifecycle here.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -15,6 +15,7 @@ let admin: Admin;
 let producer: Producer;
 let connection: Conn;
 const children: ChildProcess[] = [];
+const agentLogs: { name: string; logs: () => string }[] = [];
 
 async function until<T>(
   label: string,
@@ -44,7 +45,7 @@ async function produce(start: number, count: number) {
   });
 }
 
-async function start(name: string) {
+async function start(name: string, slots = 2) {
   const tokenFile = join(h.folder, `token-${name}`);
   await writeFile(tokenFile, connection.token, { mode: 0o600 });
   const child = spawn(process.env["PYTHON"] ?? "python3", ["deploy/connect/agent.py"], {
@@ -57,7 +58,7 @@ async function start(name: string) {
       CONNECT_ONCE: "1",
       CONNECT_KAFKA_SHARED: "1",
       CONNECT_WORKER_ID: name,
-      CONNECT_SLOTS: "2",
+      CONNECT_SLOTS: String(slots),
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -66,7 +67,10 @@ async function start(name: string) {
   child.stdout!.on("data", (data: Buffer) => {
     logs += data.toString();
   });
-  child.stderr!.resume();
+  child.stderr!.on("data", (data: Buffer) => {
+    logs += data.toString();
+  });
+  agentLogs.push({ name, logs: () => logs });
   const done = new Promise<number | null>((resolve, reject) => {
     child.once("error", reject);
     child.once("close", (code) => resolve(code));
@@ -174,7 +178,8 @@ describe.skipIf(!url || !service || !key || !brokers)(
         bootstrap_servers: brokers,
         consumer_group: true,
         group_id: group,
-        max_batch_records: 10,
+        // One record per commit keeps every partition task running long enough to be revoked.
+        max_batch_records: 1,
         max_run_seconds: 300,
       });
       connection = await h.connection(topic, "kafka-v1", "shared");
@@ -201,6 +206,28 @@ describe.skipIf(!url || !service || !key || !brokers)(
       );
     }, 180000);
 
+    afterEach(async ({ task }) => {
+      // A failed test must not leave agents behind to claim the next test's run.
+      const running = children
+        .splice(0)
+        .filter((c) => c.exitCode === null && c.signalCode === null);
+      const exited = running.map((c) => new Promise((resolve) => c.once("close", resolve)));
+      for (const child of running) kill(child);
+      await Promise.all(exited);
+      if (task.result?.state === "fail") {
+        // Agents run as child processes; their output is the only evidence of a membership race.
+        for (const agent of agentLogs)
+          console.error(`--- ${agent.name}\n${agent.logs().slice(-20000)}`);
+        const runs = await h.db
+          .from("connect_run_streams")
+          .select("run_id,shard,task_status,worker,handoffs,attempts,started_at,finished_at")
+          .gte("started_at", new Date(Date.now() - 600000).toISOString())
+          .order("started_at");
+        console.error(JSON.stringify(runs.data));
+      }
+      agentLogs.length = 0;
+    }, 60000);
+
     afterAll(async () => {
       for (const child of children) kill(child);
       await producer?.disconnect();
@@ -212,11 +239,16 @@ describe.skipIf(!url || !service || !key || !brokers)(
 
     it("joins during ingestion, hands off fenced leases and ignores broker offsets", async () => {
       const run = await h.enqueue(connection, "sync");
-      const a = await start("shared-join-a");
+      // A holds every partition task before B exists, so B's join must revoke and hand off.
+      const a = await start("shared-join-a", 4);
       await until(
-        "first agent landing",
-        () => h.run(run),
-        (r) => r.rows_committed > 0,
+        "first agent leases every partition and lands",
+        async () => [await h.run(run), await tasks(run)] as const,
+        ([r, rows]) =>
+          r.rows_committed > 0 &&
+          rows.filter(
+            (row) => row.task_status === "running" && row.worker?.startsWith("shared-join-a:"),
+          ).length === 4,
       );
       const b = await start("shared-join-b");
       await members(2);
@@ -238,7 +270,8 @@ describe.skipIf(!url || !service || !key || !brokers)(
         bootstrap_servers: brokers,
         consumer_group: true,
         group_id: group,
-        max_batch_records: 50,
+        // Small commits keep A's task running after its first checkpoint, before it is killed.
+        max_batch_records: 5,
         max_run_seconds: 300,
       });
       await produce(100, 400);
