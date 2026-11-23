@@ -55,6 +55,7 @@ export interface StreamChoice {
   primaryKey: string | string[];
   cursor: string;
   mode: "incremental" | "full_refresh" | "cdc";
+  readerSchemaSubjectId?: string;
 }
 
 /** CDC connections (`postgres-cdc-v1`, `mysql-cdc-v1`) read the change log; their streams use cdc. */

@@ -4,8 +4,39 @@ import {
   canonicalEnvelopes,
   deadLetterMessage,
   streamSchema,
+  stateMessage,
 } from "@/lib/connect-protocol";
 describe("Connect protocol", () => {
+  it("retains bounded object identities and resume positions in checkpoints", () => {
+    const files = {
+      version: 1,
+      source: "a".repeat(64),
+      objects: {
+        "prefix/a.csv": {
+          sha256: "b".repeat(64),
+          size: 12,
+          modified: "2026-11-18T00:00:00Z",
+          after: 5,
+          done: false,
+        },
+      },
+    };
+    const message = { type: "STATE", state: { version: 1, files } };
+    expect(stateMessage.parse(message).state).toHaveProperty("files", files);
+    expect(
+      stateMessage.safeParse({
+        ...message,
+        state: { version: 1, files: { ...files, source: "invalid" } },
+      }).success,
+    ).toBe(false);
+    const oversized = {
+      ...files,
+      objects: { ["x".repeat(50_000)]: files.objects["prefix/a.csv"] },
+    };
+    expect(
+      stateMessage.safeParse({ ...message, state: { version: 1, files: oversized } }).success,
+    ).toBe(false);
+  });
   it("rejects arbitrary agent actions", () =>
     expect(agentRequest.safeParse({ action: "execute", code: "code" }).success).toBe(false));
   it("preserves raw payload and explicit provenance", () => {
@@ -178,5 +209,81 @@ describe("Connect protocol source_changed report", () => {
     expect(
       agentRequest.safeParse({ ...report, detail: [{ reason: "topic_id", saved: "a b" }] }).success,
     ).toBe(false);
+  });
+});
+
+describe("Spark incremental object/range checkpoints", () => {
+  const source = "a".repeat(64);
+  const checkpoint = () => ({
+    type: "STATE",
+    state: {
+      version: 1,
+      completed: false,
+      files: {
+        version: 2,
+        source,
+        objects: {
+          "a.csv": {
+            sha256: "b".repeat(64),
+            size: 10,
+            modified: null,
+            done: false,
+            ranges: [{ range: ["a.csv", 10, null, "bytes", 0, 10, 0], after: 3 }],
+          },
+        },
+      },
+      spark: {
+        mode: "incremental",
+        source,
+        run: crypto.randomUUID(),
+        partitions: 1,
+        consistency: "single",
+      },
+    },
+  });
+  it("retains the version-2 range ledger and its matching Spark mode", () => {
+    const message = checkpoint();
+    expect(stateMessage.parse(message)).toEqual(message);
+  });
+  it("refuses mismatched identities, missing recovery ranges and false completion", () => {
+    for (const change of [
+      (m: ReturnType<typeof checkpoint>) => {
+        m.state.files.objects["a.csv"].ranges[0]!.range[0] = "other.csv";
+      },
+      (m: ReturnType<typeof checkpoint>) => {
+        m.state.files.objects["a.csv"].ranges = [];
+      },
+      (m: ReturnType<typeof checkpoint>) => {
+        m.state.completed = true;
+      },
+      (m: ReturnType<typeof checkpoint>) => {
+        m.state.spark.source = "c".repeat(64);
+      },
+    ]) {
+      const message = checkpoint();
+      change(message);
+      expect(stateMessage.safeParse(message).success).toBe(false);
+    }
+    const message = checkpoint();
+    expect(
+      stateMessage.safeParse({ ...message, state: { ...message.state, files: undefined } }).success,
+    ).toBe(false);
+    expect(
+      stateMessage.safeParse({
+        ...message,
+        state: { ...message.state, files: { ...message.state.files, account_key: "secret" } },
+      }).success,
+    ).toBe(false);
+  });
+  it("bounds the whole distributed checkpoint instead of only object identities", () => {
+    const message = checkpoint();
+    const object = message.state.files.objects["a.csv"];
+    const name = "x".repeat(25000);
+    object.ranges[0]!.range[0] = name;
+    const oversized = {
+      ...message,
+      state: { ...message.state, files: { ...message.state.files, objects: { [name]: object } } },
+    };
+    expect(stateMessage.safeParse(oversized).success).toBe(false);
   });
 });

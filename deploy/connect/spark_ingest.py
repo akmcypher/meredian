@@ -254,9 +254,15 @@ def load_range(job, i, after):
     stream=job['claim']['streams'][0]
     try:
         fs_=sf.filesystem(job['config'])
-        def records():
-            for data,pos in sf.read_range(fs_,job['config'],stream['schema'],job['plan'][i]):
+        def records(snapshot=None):
+            for data,pos in sf.read_range(fs_,job['config'],stream['schema'],job['plan'][i],snapshot=snapshot):
                 if after is None or pos>after: yield 'record',data,data['_modified'],[data['_file'],pos],pos,'upsert'
+        if 'file_digests' in job:
+            rng=job['plan'][i]; _,bucket,_=sf.settings(job['config'])
+            path=f'{bucket}/{rng[0]}'; info=fs_.get_file_info(path)
+            with sf.object_snapshot(fs_,path,rng[1],sf.modified(info.mtime)) as (snapshot,digest):
+                if digest!=job['file_digests'][rng[0]]: raise sf.Changed()
+                return upload(job,i,records(snapshot))
         return upload(job,i,records())
     except sf.Changed: raise Failed('source_changed') from None
     except ValueError as e:
@@ -275,12 +281,18 @@ def drive(job, done, checkpoint, load):
     def commit(i, part, last_of_task):
         with lock:
             if aborted.is_set(): raise Stop('connector_failed')
-            done[str(i)]={'after':part['after'],'done':last_of_task}
-            complete=all(v['done'] for v in done.values())
-            r=api(job,{'action':'commit_file','runId':claim['run_id'],'token':claim['lease_token'],'streamId':stream['id'],'sequence':seq['n'],
-                'part':part['part'],'format':part.get('format','ndjson'),'rows':part['rows'],'bytes':part['bytes'],'sha256':part['sha256'],'executor':part['executor'],'state':checkpoint(complete),
-                **({'dead_letters':part['dead_letters']} if part.get('dead_letters') else {})})
-            seq['n']=r['sequence']; committed['n']+=1; committed['complete']=complete
+            previous=done[str(i)]
+            try:
+                done[str(i)]={'after':part['after'],'done':last_of_task}
+                complete=all(v['done'] for v in done.values())
+                r=api(job,{'action':'commit_file','runId':claim['run_id'],'token':claim['lease_token'],'streamId':stream['id'],'sequence':seq['n'],
+                    'part':part['part'],'format':part.get('format','ndjson'),'rows':part['rows'],'bytes':part['bytes'],'sha256':part['sha256'],'executor':part['executor'],'state':checkpoint(complete),
+                    **({'dead_letters':part['dead_letters']} if part.get('dead_letters') else {})})
+                seq['n']=r['sequence']; committed['n']+=1; committed['complete']=complete
+            except Exception:
+                done[str(i)]=previous
+                aborted.set()
+                raise
             if fail_after is not None and committed['n']>=int(fail_after): aborted.set(); raise Stop('connector_failed')
     todo=[int(i) for i,v in sorted(done.items(),key=lambda kv:int(kv[0])) if not v['done']]
     if todo:
@@ -373,7 +385,25 @@ def main_files(job, stream, st, progress):
     re-checks its object's size and modification time: `source_changed` otherwise)."""
     import source_files as sf
     claim=job['claim']
+    if stream['sync_mode']=='incremental':
+        from spark_files_incremental import prepare
+        try:
+            work=prepare(sf.filesystem(job['config']),job['config'],stream,st,claim['run_id'],
+                         int(job.get('options',{}).get('range_bytes') or job['config'].get('range_bytes') or sf.RANGE_BYTES))
+            job['plan']=work.plan; job['file_digests']=work.digests
+            drive(job,work.done,work.checkpoint,lambda i,after: load_range(job,i,after))
+        except sf.Changed: raise Stop('source_changed') from None
+        except ValueError as e:
+            if str(e) in ('schema_drift','connector_failed','record_too_large'): raise Stop(str(e)) from None
+            raise
+        return
     if stream['sync_mode']!='full_refresh': raise Stop('connector_failed')
+    source=sf.source_identity(job['config'],stream['schema'])
+    if progress:
+        saved=progress.get('source')
+        # Historical S3 checkpoints predate source binding. ADLS never had that contract.
+        if saved!=source and (saved is not None or job['config'].get('provider','s3')!='s3'):
+            raise Stop('source_changed')
     fs_=sf.filesystem(job['config'])
     found=sf.discover(fs_,job['config'])[0]
     if found['json_schema']!=stream['schema']: raise Stop('schema_drift')
@@ -385,7 +415,7 @@ def main_files(job, stream, st, progress):
     if progress: done.update(progress['progress'])
     def checkpoint(completed):
         return {'type':'STATE','state':{'version':1,'cursor':None,'primary_key':None,'completed':completed,
-            'spark':{'run':claim['run_id'],'partitions':len(done),'consistency':'single','window':{'after':None,'until':None},'plan':plan,'progress':done}}}
+            'spark':{'source':source,'run':claim['run_id'],'partitions':len(done),'consistency':'single','window':{'after':None,'until':None},'plan':plan,'progress':done}}}
     drive(job,done,checkpoint,lambda i,after: load_range(job,i,after))
 CHUNK_RECORDS=100000
 def load_chunk(job, i, after):
@@ -493,6 +523,9 @@ def main():
     if kind not in SOURCES and kind not in ('files','kafka'): raise Stop('connector_failed')
     if len(claim.get('streams') or [])!=1: raise Stop('connector_failed')
     stream=claim['streams'][0]
+    if kind=='files' and claim.get('operation') in ('reset','backfill'):
+        stream={**stream,'sync_mode':stream.get('configured_sync_mode',stream['sync_mode'])}
+        claim['streams']=[stream]
     if stream.get('sync_mode') not in ('full_refresh','incremental'): raise Stop('connector_failed')
     if kind=='kafka' and stream['sync_mode']!='incremental': raise Stop('connector_failed')
     if (job.get('options') or {}).get('bronze_format',None) not in (None,'ndjson','parquet'): raise Stop('connector_failed')

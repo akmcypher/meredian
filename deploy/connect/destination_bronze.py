@@ -3,11 +3,11 @@ from sdk import arguments, load, emit, validate
 VERSION='bronze-v1'
 # Rejections the control plane names; retrying the identical payload cannot change them.
 FINAL={'dead_letter_budget','record_too_large'}
-def post(config,payload):
+def post(config,payload,timeout=60):
     token=open(config['token_file']).read().strip()
     req=urllib.request.Request(config['url'].rstrip('/')+'/api/public/connect-agent',data=json.dumps(payload).encode(),headers={'Content-Type':'application/json','x-ingest-token':token})
     try:
-        with urllib.request.urlopen(req,timeout=60) as response: return json.load(response)
+        with urllib.request.urlopen(req,timeout=timeout) as response: return json.load(response)
     except urllib.error.HTTPError as e:
         try: code=json.load(e).get('error')
         except Exception: code=None

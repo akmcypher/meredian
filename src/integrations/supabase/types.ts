@@ -964,6 +964,8 @@ isOneToOne: false
 "connect_cancel":
 { Args: { "_run": string }; Returns: boolean
                            },
+"connect_retire_stream": { Args: { "_stream": string }; Returns: string | null },
+"connect_schedule_due": { Args: { "_limit"?: number }; Returns: Json },
 "connect_claim":
 { Args: { "_connection": string }; Returns: Json
                            },

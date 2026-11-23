@@ -33,6 +33,59 @@ class KafkaPlan(unittest.TestCase):
         plan=kafka_plan({p:0 for p in range(8)},{p:10**7 for p in range(8)},10,None)
         self.assertLessEqual(len(plan),4096)
         self.assertEqual(sum(b-a for _,a,b in plan),8*10**7)
+class SparkFiles(unittest.TestCase):
+    def test_file_resume_fences_account_provider_and_container_but_allows_secret_rotation(self):
+        import tempfile
+        from unittest.mock import patch
+        import pyarrow.fs as fs
+        import source_files as sf
+        from spark_ingest import main_files
+        with tempfile.TemporaryDirectory() as tmp:
+            bucket=Path(tmp)/'bucket'; bucket.mkdir(); (bucket/'a.csv').write_text('id\n1\n')
+            local=fs.SubTreeFileSystem(tmp,fs.LocalFileSystem())
+            config={'provider':'adls','account_name':'first','bucket':'bucket','format':'csv','account_key':'worker-secret'}
+            schema=sf.discover(local,config)[0]['json_schema']
+            stream={'schema':schema,'sync_mode':'full_refresh'}
+            def run(config, progress=None):
+                captured=[]
+                job={'config':config,'claim':{'run_id':'run'}}
+                with patch.object(sf,'filesystem',return_value=local),patch('spark_ingest.drive',side_effect=lambda job,done,checkpoint,load:captured.append(checkpoint(False))):
+                    main_files(job,stream,{},progress)
+                return captured[0]['state']['spark']
+            initial=run(config)
+            self.assertRegex(initial.get('source',''),r'^[0-9a-f]{64}$')
+            self.assertNotIn('worker-secret',json.dumps(initial))
+            self.assertEqual(run({**config,'account_key':'rotated'},initial)['source'],initial['source'])
+            for change in ({'account_name':'second'},{'provider':'s3'},{'bucket':'different'}):
+                with self.subTest(change),self.assertRaises(Stop) as failure: run({**config,**change},initial)
+                self.assertEqual(failure.exception.code,'source_changed')
+            legacy={k:v for k,v in initial.items() if k!='source'}
+            with self.assertRaises(Stop): run(config,legacy)
+            self.assertRegex(run({**config,'provider':'s3'},legacy)['source'],r'^[0-9a-f]{64}$')
+
+    def test_avro_executor_reads_planned_ranges_and_resumes_by_global_position(self):
+        import tempfile
+        from unittest.mock import patch
+        import pyarrow.fs as fs
+        from fastavro import writer
+        import source_files as sf
+        from spark_ingest import load_range
+        with tempfile.TemporaryDirectory() as tmp:
+            bucket=Path(tmp)/'bucket'; bucket.mkdir()
+            with open(bucket/'a.avro','wb') as f:
+                writer(f,{'type':'record','name':'Row','fields':[{'name':'id','type':'long'}]},
+                       [{'id':i} for i in range(30)],sync_interval=5)
+            local=fs.SubTreeFileSystem(tmp,fs.LocalFileSystem())
+            config={'provider':'adls','account_name':'account','bucket':'bucket','format':'avro'}
+            schema=sf.discover(local,config)[0]['json_schema']
+            job={'config':config,'claim':{'streams':[{'schema':schema}]},'plan':sf.plan(local,config,1)}
+            rows=[]
+            # Network and upload are external boundaries; parser/range execution remains real.
+            with patch.object(sf,'filesystem',return_value=local),patch('spark_ingest.upload',side_effect=lambda job,i,items:list(items)):
+                for i in range(len(job['plan'])): rows.extend(load_range(job,i,12))
+            self.assertEqual([r[1]['id'] for r in rows],list(range(13,30)))
+            self.assertEqual([r[3] for r in rows],[['a.avro',i] for i in range(13,30)])
+
 class SparkSecurity(unittest.TestCase):
     SECURE={'spark.authenticate':'true','spark.network.crypto.enabled':'true','spark.io.encryption.enabled':'true'}
     def run_check(self, conf, options=None):

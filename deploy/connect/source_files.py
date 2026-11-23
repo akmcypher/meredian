@@ -1,6 +1,6 @@
 """Meridian Connect object-store files actor (deploy/connect/README.md, "Spark ingestion").
 
-Reads CSV, TSV, JSON Lines and Parquet objects under one prefix of an S3-compatible bucket (AWS S3,
+Reads CSV, TSV, JSON Lines, Parquet and Avro OCF objects in ADLS Gen2 or an S3-compatible bucket (AWS S3,
 GCS through its S3 interoperability endpoint, MinIO, R2, Supabase Storage). Credentials come from the
 connection's credential file on the worker host, never from the control plane.
 
@@ -9,30 +9,61 @@ A file is planned into ranges that can be read independently:
   the first record start after the range's first byte and finishes the record that crosses its end),
   so the ranges of a file read every record exactly once. CSV whose quoted fields may contain newlines
   (`csv_quoted_newlines: true`) cannot be split this way: each such file is one range.
-- Parquet: groups of row groups.
+- Parquet: groups of row groups. Avro: groups of object-container blocks.
 
 Each record carries `_file`, `_position` (byte offset of the record, or the global row index for
-Parquet and for unsplittable CSV) and `_modified` (the object's modification time). (`_file`,
+Parquet, Avro and for unsplittable CSV) and `_modified` (the object's modification time). (`_file`,
 `_position`) is the stream key, identical however the file is split; `_modified` is the cursor.
 
 The single-worker `read` below and the Spark executors (spark_ingest.py) use the same planning and
 parsing functions, so both land the same records.
+
+Single-worker incremental reads keep a bounded SHA-256 object ledger in the fenced checkpoint.
+Known keys must retain their bytes; a replacement requires an explicit reset. Missing completed
+objects retain their identities and Bronze history. See README.md, "Incremental object-store files".
 """
-import csv, datetime, io, json, sys, time
+import csv, datetime, hashlib, io, json, sys, tempfile, time
+from contextlib import contextmanager
 from sdk import arguments, load, emit, record, state, to_json
 VERSION='files-v1'
-FORMATS=('csv','tsv','jsonl','parquet')
-EXTENSIONS={'csv':('.csv',),'tsv':('.tsv','.tab'),'jsonl':('.jsonl','.ndjson','.json'),'parquet':('.parquet',)}
+FORMATS=('csv','tsv','jsonl','parquet','avro')
+EXTENSIONS={'avro':('.avro',),'csv':('.csv',),'tsv':('.tsv','.tab'),'jsonl':('.jsonl','.ndjson','.json'),'parquet':('.parquet',)}
 META={'_file':{'source_type':'string','nullable':False},'_position':{'source_type':'bigint','nullable':False},
       '_modified':{'source_type':'timestamp with time zone','nullable':False}}
 KEYS=['_file','_position']; CURSOR='_modified'
 RANGE_BYTES=128*1024*1024
 READ=1024*1024
 SAMPLE=100
+LEDGER_BYTES=48*1024
 class Changed(Exception):
-    """The object changed between planning and reading."""
+    """The source identity or an object's committed/planned content changed."""
+@contextmanager
+def object_snapshot(fs_, path, size, mod):
+    """Hash and parse the same bounded-disk bytes; discard them on every exit."""
+    import pyarrow as pa
+    with tempfile.TemporaryDirectory(prefix='meridian-files-') as tmp:
+        local=f'{tmp}/object'; digest=hashlib.sha256(); copied=0
+        with fs_.open_input_file(path) as src, open(local,'wb') as dest:
+            while True:
+                chunk=src.read(READ)
+                if not chunk: break
+                dest.write(chunk); digest.update(chunk); copied+=len(chunk)
+        info=fs_.get_file_info(path)
+        if copied!=size or info.size!=size or modified(info.mtime)!=mod: raise Changed()
+        with pa.OSFile(local,'rb') as snapshot:
+            yield snapshot,digest.hexdigest()
+
 def filesystem(config):
     from pyarrow import fs
+    provider=config.get('provider','s3')
+    if provider not in ('s3','adls'): raise ValueError('connector_failed')
+    if provider=='adls':
+        account=config.get('account_name') or ''
+        if not account or not all(c.isascii() and (c.isalnum() or c=='-') for c in account): raise ValueError('connector_failed')
+        # Use Azure's HTTPS endpoints. Never reinterpret an S3 endpoint as an Azure authority.
+        if config.get('endpoint'): raise ValueError('connector_failed')
+        keys=('account_key','sas_token','tenant_id','client_id','client_secret')
+        return fs.AzureFileSystem(account_name=account,**{k:config[k] for k in keys if config.get(k) is not None})
     endpoint=config.get('endpoint')
     kw={'access_key':config.get('access_key_id'),'secret_key':config.get('secret_access_key'),'session_token':config.get('session_token'),
         'region':config.get('region') or 'us-east-1'}
@@ -70,22 +101,42 @@ def discover(fs_, config):
     fmt,bucket,_=settings(config)
     files=listing(fs_,config)
     namespace,name=stream_of(config)
-    props={}
+    schema=schema_of(None,fmt)
     if files:
         key=files[0][0]
         with fs_.open_input_file(f'{bucket}/{key}') as f:
-            if fmt=='parquet':
-                import pyarrow.parquet as pq
-                for field in pq.ParquetFile(f).schema_arrow: props[field.name]={'source_type':str(field.type),'nullable':field.nullable}
-            elif fmt in ('csv','tsv'):
-                for col in header(f,fmt): props[col]={'source_type':'string','nullable':True}
-            else:
-                for _,line in lines(f,0,min(f.size(),READ*4),False):
-                    for k,v in json.loads(line).items(): props.setdefault(k,{'source_type':type(v).__name__ if v is not None else 'null','nullable':True})
-                    if len(props)>2000: break
+            schema=schema_of(f,fmt)
+    return [{'namespace':namespace,'name':name,'json_schema':schema,'primary_key':KEYS,'cursor_field':CURSOR}]
+
+def schema_of(f, fmt):
+    """One schema inference path for discovery and immutable incremental snapshots."""
+    props={}
+    if f is not None:
+        if fmt=='avro':
+            from fastavro import reader
+            return schema_of_avro(reader(f).writer_schema)
+        elif fmt=='parquet':
+            import pyarrow.parquet as pq
+            for field in pq.ParquetFile(f).schema_arrow: props[field.name]={'source_type':str(field.type),'nullable':field.nullable}
+        elif fmt in ('csv','tsv'):
+            for col in header(f,fmt): props[col]={'source_type':'string','nullable':True}
+        else:
+            for _,line in lines(f,0,min(f.size(),READ*4),False):
+                for k,v in json.loads(line).items(): props.setdefault(k,{'source_type':type(v).__name__ if v is not None else 'null','nullable':True})
+                if len(props)>2000: break
     if any(k in META for k in props): raise ValueError('schema_drift')
-    return [{'namespace':namespace,'name':name,'json_schema':{'type':'object','properties':{**props,**META},'x-files':{'format':fmt,'columns':list(props)}},
-             'primary_key':KEYS,'cursor_field':CURSOR}]
+    return {'type':'object','properties':{**props,**META},'x-files':{'format':fmt,'columns':list(props)}}
+def schema_of_avro(avro):
+    if not isinstance(avro,dict) or avro.get('type')!='record': raise ValueError('schema_drift')
+    props={}
+    for field in avro['fields']:
+        typ=field['type']
+        props[field['name']]={'source_type':json.dumps(typ,sort_keys=True,separators=(',',':')),
+                              'nullable':typ=='null' or isinstance(typ,list) and 'null' in typ}
+    if any(k in META for k in props): raise ValueError('schema_drift')
+    return {'type':'object','properties':{**props,**META},
+            'x-files':{'format':'avro','columns':list(props),'avro_schema':avro}}
+
 def columns_of(schema):
     """Column order lives in x-files.columns: the schema is stored as jsonb, which keeps no key order."""
     return list(schema['x-files']['columns'])
@@ -130,41 +181,75 @@ def lines(f, start, end, skip_header):
             line=(_strip_bom(buf) if base==0 else buf).rstrip(b'\r')
             if line: yield base,line
             return
+def plan_object(config, key, size, mod, range_bytes, f=None, limit=None):
+    """Plan one immutable file, optionally from its already verified disk snapshot."""
+    fmt,_,_=settings(config); out=[]
+    if range_bytes<1: raise ValueError('connector_failed')
+    def add(rng):
+        if limit is not None and len(out)>=limit: raise ValueError('record_too_large')
+        out.append(rng)
+    if fmt=='avro':
+        from fastavro import block_reader
+        f.seek(0); first=None; end=0; rows=0; base=0
+        for block in block_reader(f):
+            if first is not None and block.offset+block.size-first>range_bytes:
+                add([key,size,mod,'avroblocks',first,end,base])
+                base+=rows; first=None; rows=0
+            if first is None: first=block.offset
+            end=block.offset+block.size; rows+=block.num_records
+        add([key,size,mod,'avroblocks',first if first is not None else 0,end,base])
+    elif fmt=='parquet':
+        import pyarrow.parquet as pq
+        f.seek(0); meta=pq.ParquetFile(f).metadata; g=0; base=0
+        while g<meta.num_row_groups:
+            first=g; rows=0; nbytes=0
+            while g<meta.num_row_groups and (g==first or nbytes+meta.row_group(g).total_byte_size<=range_bytes):
+                nbytes+=meta.row_group(g).total_byte_size; rows+=meta.row_group(g).num_rows; g+=1
+            add([key,size,mod,'rowgroups',first,g,base]); base+=rows
+        if meta.num_row_groups==0: add([key,size,mod,'rowgroups',0,0,0])
+    elif fmt in ('csv','tsv') and config.get('csv_quoted_newlines'):
+        add([key,size,mod,'records',0,size,0])
+    else:
+        a=0
+        while True:
+            b=min(size,a+range_bytes); add([key,size,mod,'bytes',a,b,0]); a=b
+            if a>=size: break
+    return out
+
 def plan(fs_, config, range_bytes=RANGE_BYTES):
-    """The ranges to read, in key order: [key, size, modified, kind, a, b, base]. Byte ranges are
-    [a, b); row-group ranges are row groups a..b-1 starting at global row `base`."""
+    """Ranges in key order: [key, size, modified, kind, a, b, global row base]."""
     fmt,bucket,_=settings(config); out=[]
     for key,size,mtime in listing(fs_,config):
         mod=modified(mtime)
-        if fmt=='parquet':
-            import pyarrow.parquet as pq
-            with fs_.open_input_file(f'{bucket}/{key}') as f: meta=pq.ParquetFile(f).metadata
-            g=0; base=0
-            while g<meta.num_row_groups:
-                first=g; rows=0; nbytes=0
-                while g<meta.num_row_groups and (g==first or nbytes+meta.row_group(g).total_byte_size<=range_bytes):
-                    nbytes+=meta.row_group(g).total_byte_size; rows+=meta.row_group(g).num_rows; g+=1
-                out.append([key,size,mod,'rowgroups',first,g,base]); base+=rows
-            if meta.num_row_groups==0: out.append([key,size,mod,'rowgroups',0,0,0])
-        elif fmt in ('csv','tsv') and config.get('csv_quoted_newlines'):
-            out.append([key,size,mod,'records',0,size,0])
-        else:
-            a=0
-            while True:
-                b=min(size,a+range_bytes); out.append([key,size,mod,'bytes',a,b,0]); a=b
-                if a>=size: break
+        if fmt in ('avro','parquet'):
+            with fs_.open_input_file(f'{bucket}/{key}') as f:
+                out.extend(plan_object(config,key,size,mod,range_bytes,f))
+        else: out.extend(plan_object(config,key,size,mod,range_bytes))
     return out
-def read_range(fs_, config, schema, rng):
-    """Yields (data, position) for one planned range, using the schema's columns."""
+
+def read_range(fs_, config, schema, rng, snapshot=None):
+    """Yields (data, position) for one planned range. An optional disk snapshot supplies
+    already-hashed immutable bytes; otherwise verify the object's planned metadata."""
     fmt,bucket,_=settings(config)
     key,size,mod,kind,a,b,base=rng
     path=f'{bucket}/{key}'
-    info=fs_.get_file_info(path)
-    if info.size!=size or modified(info.mtime)!=mod: raise Changed()
+    if snapshot is None:
+        info=fs_.get_file_info(path)
+        if info.size!=size or modified(info.mtime)!=mod: raise Changed()
     cols=columns_of(schema)
     meta=lambda pos: {'_file':key,'_position':pos,'_modified':mod}
-    with fs_.open_input_file(path) as f:
-        if fmt=='parquet':
+    with (snapshot if snapshot is not None else fs_.open_input_file(path)) as f:
+        if fmt=='avro':
+            from fastavro import block_reader
+            blocks=block_reader(f)
+            if schema_of_avro(blocks.writer_schema)!=schema: raise ValueError('schema_drift')
+            if a: f.seek(a)
+            pos=base
+            for block in blocks:
+                if block.offset>=b: break
+                for row in block:
+                    yield {**{k:to_json(v) for k,v in row.items()},**meta(pos)},pos; pos+=1
+        elif fmt=='parquet':
             import pyarrow.parquet as pq
             pf=pq.ParquetFile(f)
             if [x.name for x in pf.schema_arrow]!=cols or any({'source_type':str(x.type),'nullable':x.nullable}!=schema['properties'][x.name] for x in pf.schema_arrow): raise ValueError('schema_drift')
@@ -192,8 +277,79 @@ def read_range(fs_, config, schema, rng):
                 value=json.loads(line)
                 if not isinstance(value,dict) or any(k in META for k in value): raise ValueError('connector_failed')
                 yield {**{k:to_json(v) for k,v in value.items()},**meta(pos)},pos
+def files_state(ledger, completed=False):
+    # Leave room under the database rewind limit (64 KiB) for the STATE envelope.
+    if len(json.dumps(ledger,ensure_ascii=True).encode())>LEDGER_BYTES: raise ValueError('record_too_large')
+    return state(completed=completed,source={'files':json.loads(json.dumps(ledger))})
+
+def source_identity(config, schema):
+    """Secret-free source location and parsing identity, shared by ledger and Spark resumes."""
+    fmt,bucket,prefix=settings(config)
+    binding={k:config.get(k) for k in ('endpoint','region','virtual_addressing')}
+    binding.update(bucket=bucket,prefix=prefix,format=fmt,
+                   csv_quoted_newlines=bool(config.get('csv_quoted_newlines')),schema=schema)
+    if config.get('provider','s3')!='s3': binding.update(provider=config['provider'],account_name=config.get('account_name'))
+    return hashlib.sha256(json.dumps(binding,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+
+def read_incremental(fs_, config, stream, checkpoint):
+    """Content-addressed, append-only object ingestion. Known keys may never change bytes.
+    Each row and its position land together, including when destination budgets are small."""
+    fmt,bucket,prefix=settings(config)
+    source=source_identity(config,stream['schema'])
+    ledger=json.loads(json.dumps(checkpoint.get('files'))) if checkpoint.get('files') is not None else None
+    if ledger is None:
+        if checkpoint: raise Changed()
+        ledger={'version':1,'source':source,'objects':{}}
+    if ledger.get('version')!=1 or ledger.get('source')!=source or not isinstance(ledger.get('objects'),dict): raise Changed()
+    files_state(ledger)
+    objects=ledger['objects']; files=listing(fs_,config)
+    present={key for key,_,_ in files}
+    if any(not obj['done'] and key not in present for key,obj in objects.items()): raise Changed()
+    for key,size,mtime in files:
+        path=f'{bucket}/{key}'; mod=modified(mtime)
+        with object_snapshot(fs_,path,size,mod) as (f,sha):
+            old=objects.get(key)
+            if old is not None:
+                if old['sha256']!=sha or old['size']!=size: raise Changed()
+                if old['done']: continue
+                obj=old
+            else:
+                obj={'sha256':sha,'size':size,'modified':mod,'after':None,'done':False}
+                objects[key]=obj
+            files_state(ledger)  # Refuse an unrepresentable new key before emitting rows.
+            if not size and fmt not in ('parquet','avro'):
+                obj['done']=True
+                yield files_state(ledger)
+                continue
+            found=schema_of(f,fmt)
+            # JSON members are named, unlike positional CSV/TSV and Parquet columns.
+            if fmt=='jsonl': found['x-files']['columns']=columns_of(stream['schema'])
+            if found!=stream['schema']: raise ValueError('schema_drift')
+            f.seek(0)
+            if fmt=='avro':
+                kind='avroblocks'; end=size
+            elif fmt=='parquet':
+                import pyarrow.parquet as pq
+                kind='rowgroups'; end=pq.ParquetFile(f).metadata.num_row_groups
+            else:
+                kind='records' if fmt in ('csv','tsv') and config.get('csv_quoted_newlines') else 'bytes'
+                end=size
+            rng=[key,size,obj['modified'],kind,0,end,0]
+            for data,pos in read_range(fs_,config,stream['schema'],rng,snapshot=f):
+                if obj['after'] is not None and pos<=obj['after']: continue
+                obj['after']=pos
+                checkpoint_message=files_state(ledger)
+                yield record(stream,data,data['_modified'],[key,pos],int(time.time()*1000))
+                yield checkpoint_message
+            obj['done']=True
+            yield files_state(ledger)
+    yield files_state(ledger,True)
+
 def read(fs_, config, stream, checkpoint):
-    """Single worker: every range in order. The checkpoint is the last committed (_file, _position)."""
+    """Single worker: content ledger for incremental; row-key resume for full refresh."""
+    if stream.get('sync_mode')=='incremental':
+        yield from read_incremental(fs_,config,stream,checkpoint)
+        return
     found=discover(fs_,config)[0]
     if found['json_schema']!=stream['schema']: raise ValueError('schema_drift')
     after=checkpoint.get('primary_key')
@@ -209,7 +365,7 @@ def read(fs_, config, stream, checkpoint):
     yield state(None,list(last) if last else None,True)
 def main():
     a=arguments()
-    if a.command=='spec': emit('SPEC',spec={'protocol':'meridian-connect/1','version':VERSION,'config':['endpoint','region','bucket','prefix','format','access_key_id','secret_access_key','session_token','csv_quoted_newlines','range_bytes'],'modes':['full_refresh'],'deletes':False,'composite_keys':True}); return
+    if a.command=='spec': emit('SPEC',spec={'protocol':'meridian-connect/1','version':VERSION,'config':['provider','account_name','account_key','sas_token','tenant_id','client_id','client_secret','endpoint','region','bucket','prefix','format','access_key_id','secret_access_key','session_token','csv_quoted_newlines','range_bytes'],'modes':['full_refresh','incremental'],'deletes':False,'composite_keys':True}); return
     if a.command=='health': emit('LOG',log={'level':'INFO','code':'healthy','version':VERSION}); return
     try:
         config=load(a.config); fs_=filesystem(config)
@@ -217,13 +373,13 @@ def main():
         elif a.command=='discover': emit('CATALOG',catalog={'streams':discover(fs_,config)})
         elif a.command=='read':
             stream=load(a.catalog)
-            if stream.get('sync_mode','full_refresh')!='full_refresh': raise ValueError('connector_failed')
+            if stream.get('sync_mode','full_refresh') not in ('full_refresh','incremental'): raise ValueError('connector_failed')
             for m in read(fs_,config,stream,load(a.state)): print(json.dumps(m),flush=True)
         else: raise ValueError('connector_failed')
     except Changed:
         emit('TRACE',trace={'type':'ERROR','code':'source_changed'}); raise SystemExit(1)
     except Exception as e:
         text=str(e)
-        code=text if text in ('schema_drift','connector_failed') else 'auth_failed' if any(s in text for s in ('AccessDenied','InvalidAccessKeyId','SignatureDoesNotMatch','403')) else 'source_unavailable'
+        code=text if text in ('schema_drift','connector_failed','record_too_large') else 'auth_failed' if any(s in text for s in ('AccessDenied','InvalidAccessKeyId','SignatureDoesNotMatch','403')) else 'source_unavailable'
         emit('TRACE',trace={'type':'ERROR','code':code}); raise SystemExit(1)
 if __name__=='__main__': main()

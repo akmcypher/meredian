@@ -24,9 +24,31 @@ Demonstrated on a local stack (Spark items with a two-worker Spark cluster); not
   agents at once; each connection's own token keeps working.
 - **Connect UI:** a Worker pools panel (create, enable or disable, new token, agents online and
   slots) and a pool choice and limit in each connection's settings.
-- **Upgrading:** apply migrations 0106 (`20261120000000_0106_bronze_parquet_parts.sql`) and 0108
-  (`20261121000000_0108_connect_worker_pools.sql`), and update the Spark image and agents. Without
-  the Parquet option or a pool, nothing changes.
+- **Incremental object-store files:** `files-v1` and `spark-files-v1` streams can run
+  incrementally. Each object is identified by its content (SHA-256), so unchanged objects are
+  skipped, new keys are read whatever their sort order, and an interrupted object resumes after its
+  last committed row. A changed object at a known key fails with `source_changed` instead of
+  overwriting Bronze; deleted objects keep their history.
+- **Avro files and ADLS:** `format: avro` reads Avro container files, and `provider: adls` reads
+  Azure Data Lake Storage with an account key, SAS token or service principal kept on the agent.
+  ADLS is tested with local files only; live Azure access is unverified.
+- **Kafka consumer groups:** `consumer_group: true` with a `group_id` reads a whole topic as one
+  group member. With `CONNECT_KAFKA_SHARED=1`, several agents share one connection's partitions
+  through broker assignments; revoked partitions are fenced and handed over without duplicates.
+  Positions always come from landed Bronze checkpoints; broker offsets are never committed.
+- **Avro schema evolution:** Kafka and Spark Kafka resolve each record's writer schema, including
+  referenced schemas, and can normalize to a chosen reader subject. Changing only the reader keeps
+  committed offsets. Incompatible records become dead letters that can be replayed after a fix.
+- **Retire streams:** a stream can be retired, which fences future ingestion and keeps its Bronze
+  history. For PostgreSQL CDC, the agent drops the replication slot so it stops holding WAL.
+- **Durable schedules:** scheduled runs are created by `POST /api/public/connect-tick` (bearer
+  `CRON_SECRET`) from your own cron, not by agent polling. Missed intervals are coalesced into one
+  run, and connections with an active run are skipped. Manual Sync works without a cron.
+- **Upgrading:** apply migrations 0106, 0108, 0109 (stream retirement), 0110 (scheduler), 0111
+  (shared Kafka), 0112 (Avro reader state) and 0114 (connection lock order), update the agents
+  and the Spark image, and set up a
+  cron for `/api/public/connect-tick` if you use schedules. Without these options, existing
+  connections behave as before.
 
 ## Meridian Community Preview 0.3
 

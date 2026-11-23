@@ -1,7 +1,8 @@
 """Kafka source actor (confluent-kafka, Apache-2.0).
 
 Positions are the per-partition next offsets in STATE, which the control plane stores with each
-landed commit; the actor assigns partitions explicitly and never commits to the consumer group,
+landed commit; the actor assigns partitions explicitly by default, or subscribes as a single
+whole-topic consumer-group member. It never stores or commits consumer-group offsets,
 so a crash, a rebalance elsewhere or a reset group cannot move Meridian's position. A run reads
 up to the high watermarks captured at its start, then completes. Messages that cannot be decoded
 become DEAD_LETTER messages and their position still advances; replay re-decodes them later.
@@ -12,7 +13,7 @@ Checkpoints carry the cluster and topic identity; a different topic (deleted and
 different cluster, a missing partition or a position above the high watermark fails closed with
 source_changed until the owner runs an explicit reset.
 """
-import base64, io, json, os, re, ssl, time, urllib.request, urllib.error
+import base64, copy, io, json, os, re, ssl, time, urllib.request, urllib.error, urllib.parse
 from confluent_kafka import Consumer, TopicPartition, KafkaError, KafkaException, TopicCollection
 from confluent_kafka.admin import AdminClient
 from sdk import arguments, load, emit, record, state, dead_letter, to_json
@@ -149,10 +150,47 @@ def consumer(config):
     # Prefetch is capped (total, not per partition) so a fast topic cannot fill memory while the
     # destination is slow; a blocked stdout pipe then stops polling, which is the backpressure.
     prefetch=limits(config)['max_prefetch_kbytes']
-    c=Consumer({**client_config(config),'error_cb':errors,'queued.max.messages.kbytes':prefetch,'fetch.max.bytes':8*1024*1024,'group.id':config.get('group_id','meridian-connect'),'enable.auto.commit':False,'enable.auto.offset.store':False,'auto.offset.reset':'earliest','enable.partition.eof':True,'isolation.level':'read_committed'})
+    group={'partition.assignment.strategy':'range'} if consumer_group(config) else {}
+    c=Consumer({**client_config(config),**group,'error_cb':errors,'queued.max.messages.kbytes':prefetch,'fetch.max.bytes':8*1024*1024,'group.id':config.get('group_id','meridian-connect'),'enable.auto.commit':False,'enable.auto.offset.store':False,'auto.offset.reset':'earliest','enable.partition.eof':True,'isolation.level':'read_committed'})
     # OAUTHBEARER: the first token is fetched from poll(), before any metadata request.
     if config.get('_msk_iam'): c.poll(0)
     return Guarded(c,errors)
+
+def consumer_group(config):
+    enabled=config.get('consumer_group',False)
+    if not isinstance(enabled,bool): raise ValueError('connector_failed')
+    if enabled and (not isinstance(config.get('group_id'),str) or not config['group_id'].strip()):
+        raise ValueError('connector_failed')
+    return enabled
+
+class GroupMembership:
+    """One leased whole-topic task, one eager assignment. Rebalances end the attempt.
+
+    In-flight stdout is not an acknowledgement of landing. Only a new attempt can obtain
+    a fresh committed Postgres checkpoint, so never resume within this member after revoke.
+    Callback failures are checked after poll rather than relying on callback exception behavior.
+    """
+    def __init__(self, topic, positions):
+        self.topic=topic; self.positions=positions; self.joined=False; self.failure=None
+    def assign(self, c, partitions):
+        actual={(p.topic,p.partition) for p in partitions}
+        expected={(self.topic,p) for p in self.positions}
+        if self.joined or actual!=expected or self.failure:
+            self.failure=self.failure or ('group_assignment_changed' if self.joined else 'group_assignment_incomplete')
+            c.assign([])
+            return
+        # Override broker-committed offsets on every initial assignment. The pinned eager
+        # range assignor permits assign(); cooperative assignors require incremental_assign().
+        c.assign([TopicPartition(self.topic,p,self.positions[p]) for p in sorted(self.positions)])
+        self.joined=True
+    def revoke(self, c, partitions):
+        self.failure=self.failure or 'group_assignment_revoked'
+        c.unassign()
+    def lost(self, c, partitions):
+        self.failure=self.failure or 'group_assignment_lost'
+        c.unassign()
+    def check(self):
+        if self.failure: raise Stop('source_unavailable',[{'reason':self.failure}])
 def stream_name(topic):
     name=re.sub(r'[^a-zA-Z0-9_]','_',topic)
     return ('t_'+name if not re.match(r'[a-zA-Z_]',name) else name)[:63]
@@ -160,6 +198,7 @@ class Registry:
     """Confluent-compatible schema registry client (Karapace, Apicurio ccompat, Confluent)."""
     def __init__(self, config):
         self.url=(config.get('schema_registry_url') or '').rstrip('/'); self.cache={}
+        self.cache_sizes={}; self.cache_bytes=0
         self.auth=None
         if config.get('schema_registry_username'):
             self.auth='Basic '+base64.b64encode(f"{config['schema_registry_username']}:{config.get('schema_registry_password','')}".encode()).decode()
@@ -171,16 +210,74 @@ class Registry:
         elif self.auth: raise ValueError('connector_failed')
     def get(self, path):
         req=urllib.request.Request(self.url+path,headers={'Accept':'application/vnd.schemaregistry.v1+json',**({'Authorization':self.auth} if self.auth else {})})
-        with urllib.request.urlopen(req,timeout=10,context=self.tls) as r: return json.load(r)
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args, **kwargs): return None
+        # Never forward registry credentials to another host or downgrade them to HTTP.
+        opener=urllib.request.build_opener(NoRedirect(),urllib.request.HTTPSHandler(context=self.tls))
+        with opener.open(req,timeout=10) as r:
+            body=r.read(4*1024*1024+1)
+        if len(body)>4*1024*1024: raise ValueError('connector_failed')
+        return json.loads(body)
     def schema(self, schema_id):
         if schema_id not in self.cache:
             import fastavro
-            try: found=self.get(f'/schemas/ids/{schema_id}')
-            except urllib.error.HTTPError as e:
-                if e.code==404: raise Decode('schema_not_found')
-                raise
-            if found.get('schemaType','AVRO')!='AVRO': raise Decode('deserialization_failed')
-            self.cache[schema_id]=fastavro.parse_schema(json.loads(found['schema']))
+            # Names belong to one immutable writer graph. Sharing this dictionary between
+            # schema IDs would silently replace a referenced type with another version.
+            names={}; visiting=set(); loaded=set(); bindings={}; targets={}; total=[0]
+            def document(path):
+                try: return self.get(path)
+                except urllib.error.HTTPError as e:
+                    if e.code==404: raise Decode('schema_not_found') from None
+                    raise  # outages/auth failures stop extraction; they are not poison records
+            def parse(found, depth=0, expected=None):
+                if depth>32 or not isinstance(found,dict) or found.get('schemaType','AVRO')!='AVRO':
+                    raise Decode('deserialization_failed')
+                text=found.get('schema')
+                if not isinstance(text,str): raise Decode('deserialization_failed')
+                total[0]+=len(text.encode())
+                if total[0]>4*1024*1024: raise Decode('deserialization_failed')
+                try: schema=json.loads(text)
+                except (ValueError,TypeError): raise Decode('deserialization_failed') from None
+                if expected:
+                    if not isinstance(schema,dict) or schema.get('type') not in ('record','enum','fixed'):
+                        raise Decode('deserialization_failed')
+                    name=schema.get('name'); namespace=schema.get('namespace','')
+                    if not isinstance(name,str) or not isinstance(namespace,str): raise Decode('deserialization_failed')
+                    fullname=name if '.' in name or not namespace else namespace+'.'+name
+                    if fullname!=expected: raise Decode('deserialization_failed')
+                refs=found.get('references',[])
+                if not isinstance(refs,list) or len(refs)>128: raise Decode('deserialization_failed')
+                for ref in refs:
+                    if not isinstance(ref,dict): raise Decode('deserialization_failed')
+                    name,subject,version=ref.get('name'),ref.get('subject'),ref.get('version')
+                    if (not isinstance(name,str) or not name or len(name)>2048 or not isinstance(subject,str) or
+                            not subject or len(subject)>2048 or type(version) is not int or version<1):
+                        raise Decode('deserialization_failed')
+                    key=(subject,version)
+                    if name in bindings and bindings[name]!=key: raise Decode('deserialization_failed')
+                    if key in targets and targets[key]!=name: raise Decode('deserialization_failed')
+                    bindings[name]=key
+                    targets[key]=name
+                    if key in visiting or len(loaded|visiting)>=128: raise Decode('deserialization_failed')
+                    if key not in loaded:
+                        visiting.add(key)
+                        parse(document(f'/subjects/{urllib.parse.quote(subject,safe="")}/versions/{version}'),depth+1,name)
+                        visiting.remove(key); loaded.add(key)
+                    if name not in names: raise Decode('deserialization_failed')
+                candidate=copy.deepcopy(names)
+                try: parsed=fastavro.parse_schema(schema,candidate)
+                except Exception: raise Decode('deserialization_failed') from None
+                if any(candidate.get(name)!=definition for name,definition in names.items()):
+                    raise Decode('deserialization_failed')
+                names.clear(); names.update(candidate)
+                return parsed
+            parsed=parse(document(f'/schemas/ids/{schema_id}'))
+            # Bound writer-ID churn in long runs; an evicted immutable ID is fetched again.
+            while self.cache and (len(self.cache)>=64 or self.cache_bytes+total[0]>8*1024*1024):
+                oldest=next(iter(self.cache)); self.cache.pop(oldest)
+                self.cache_bytes-=self.cache_sizes.pop(oldest)
+            self.cache[schema_id]=parsed
+            self.cache_sizes[schema_id]=total[0]; self.cache_bytes+=total[0]
         return self.cache[schema_id]
 class Stop(Exception):
     """Fails the run with a safe code and a positions-only detail the agent reports."""
@@ -202,13 +299,13 @@ def decoder(config, stream):
     def decode(raw, use_reader=True):
         if raw is None: return None
         # Confluent wire format: magic byte 0, 4-byte schema id, Avro body.
-        if len(raw)>5 and raw[0]==0: return avro(raw,use_reader)
+        if len(raw)>=5 and raw[0]==0: return avro(raw,use_reader)
         try: return json.loads(raw.decode('utf-8'))
         except Exception: raise Decode('deserialization_failed')
     def key(raw):
         # Keys stay text unless Avro-encoded; JSON-parsing b'1' would turn the key into a number.
         if raw is None: return None
-        try: return to_json(avro(raw,False)) if len(raw)>5 and raw[0]==0 else raw.decode('utf-8')
+        try: return to_json(avro(raw,False)) if len(raw)>=5 and raw[0]==0 else raw.decode('utf-8')
         except (Decode,UnicodeDecodeError): return base64.b64encode(raw).decode()
     return decode,key
 def debezium(value):
@@ -266,6 +363,9 @@ def discover(config):
     return streams
 def plan(config, stream):
     """Lists the topic's partitions: the control plane makes one task per partition."""
+    # The agent must bypass splitting for group mode; numeric shard checkpoints only permit
+    # their own partition and therefore cannot represent a group assignment.
+    if consumer_group(config): raise ValueError('connector_failed')
     topic=stream['schema'].get('x-kafka-topic')
     if not topic or stream_name(topic)!=stream['name']: raise ValueError('schema_drift')
     c=consumer(config)
@@ -331,7 +431,8 @@ def read(config, stream, checkpoint):
     if not topic or stream_name(topic)!=stream['name']: raise ValueError('schema_drift')
     # A partition task (shard) reads and checkpoints only its own partition.
     shard=stream.get('shard') or ''
-    only={int(shard)} if shard else None
+    grouped=consumer_group(config)
+    if grouped and shard: raise ValueError('connector_failed')
     decode,key=decoder(config,stream)
     bounds=limits(config)
     c=consumer(config)
@@ -356,13 +457,20 @@ def read(config, stream, checkpoint):
                 out.append({'partition':str(p),'position':str(positions[p]),'end':str(end)})
             for i in range(0,len(out),1024): yield {'type':'LOG','log':{'level':'INFO','code':'partition_lag','detail':out[i:i+1024]}}
         pending={tp.partition for tp in assign}
-        if assign: c.assign(assign)
+        membership=GroupMembership(topic,positions) if grouped else None
+        if membership:
+            c.subscribe([topic],on_assign=membership.assign,on_revoke=membership.revoke,on_lost=membership.lost)
+        elif assign: c.assign(assign)
         deadline=time.time()+bounds['max_run_seconds']
         batch=0; batch_bytes=0; total=0; stopped=None
-        while pending:
-            if time.time()>=deadline: stopped='max_run_seconds'; break
+        while pending or (membership and not membership.joined):
+            if time.time()>=deadline:
+                if membership and not membership.joined:
+                    raise Stop('source_unavailable',[{'reason':'group_assignment_timeout'}])
+                stopped='max_run_seconds'; break
             if bounds['max_run_records'] is not None and total>=bounds['max_run_records']: stopped='max_run_records'; break
             msg=c.poll(1.0)
+            if membership: membership.check()
             if msg is None: continue
             p=msg.partition()
             if msg.error():
@@ -395,6 +503,7 @@ def portable(config):
     """The config with its certificate files inlined as PEM, for a reader that cannot open the
     agent host's files (Spark executors). PKCS#12 keystores have no PEM form in librdkafka: use the
     certificate and key PEM files instead."""
+    if consumer_group(config): raise ValueError('connector_failed')
     out=dict(config)
     for location,pem in (('ssl_ca_location','ssl_ca_pem'),('ssl_certificate_location','ssl_certificate_pem'),('ssl_key_location','ssl_key_pem'),('schema_registry_ca_location','schema_registry_ca_pem')):
         path=out.pop(location,None)
@@ -407,6 +516,7 @@ def chunk(config, stream, partition, start, end, reached):
     DEAD_LETTER messages for records that cannot be decoded. reached['offset'] ends as the next
     offset to read, which stays below `end` when the log ends first (compaction, aborted
     transactions or records not yet committed): a position never moves past what was read."""
+    if consumer_group(config): raise ValueError('connector_failed')
     topic=stream['schema']['x-kafka-topic']
     decode,key=decoder(config,stream)
     reached['offset']=start
@@ -454,7 +564,7 @@ def replay(config, stream):
     if unresolved or deferred: raise Stop('replay_incomplete',[{'selected':str(len(letters)+deferred),'replayed':str(len(replayed)),'still_failing':str(len(unresolved)),'deferred':str(deferred)}])
 def main():
     a=arguments()
-    if a.command=='spec': emit('SPEC',spec={'protocol':'meridian-connect/1','version':VERSION,'partitioned':True,'config':['bootstrap_servers',*SECURITY,'allow_cleartext_password','schema_registry_url','schema_registry_username','schema_registry_password','schema_registry_ca_location','group_id',*LIMITS,'profile','api_key','api_secret','connection_string','aws_region','aws_role_arn','aws_access_key_id','aws_secret_access_key','aws_session_token'],'profiles':sorted(PROFILES),'security':{'protocols':sorted(PROTOCOLS),'sasl_mechanisms':sorted(MECHANISMS),'mtls':True},'modes':['incremental'],'deletes':True,'positions':'per-partition offsets, stored by the control plane','formats':['json','debezium-json','confluent-avro']}); return
+    if a.command=='spec': emit('SPEC',spec={'protocol':'meridian-connect/1','version':VERSION,'partitioned':True,'config':['bootstrap_servers',*SECURITY,'allow_cleartext_password','schema_registry_url','schema_registry_username','schema_registry_password','schema_registry_ca_location','group_id','consumer_group',*LIMITS,'profile','api_key','api_secret','connection_string','aws_region','aws_role_arn','aws_access_key_id','aws_secret_access_key','aws_session_token'],'profiles':sorted(PROFILES),'security':{'protocols':sorted(PROTOCOLS),'sasl_mechanisms':sorted(MECHANISMS),'mtls':True},'modes':['incremental'],'deletes':True,'positions':'per-partition offsets, stored by the control plane','formats':['json','debezium-json','confluent-avro']}); return
     if a.command=='health': emit('LOG',log={'level':'INFO','code':'healthy','version':VERSION}); return
     try:
         config=apply_profile(resolve_files(load(a.config),os.path.dirname(os.path.abspath(a.config)) if a.config else ''))

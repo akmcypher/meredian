@@ -20,12 +20,17 @@ const CSV_ROWS = 300000;
 const RANGE = 2 * 1024 * 1024;
 const h = new SparkHarness();
 const bucket = `spark-files-${crypto.randomUUID().slice(0, 8)}`;
-const conn = {} as Record<"csv" | "csvBase" | "pq" | "pqBase" | "jsonl" | "jsonlBase", Conn>;
+const conn = {} as Record<
+  "csv" | "csvBase" | "pq" | "pqBase" | "jsonl" | "jsonlBase" | "avro" | "avroBase" | "incremental",
+  Conn
+>;
+let fixtureDir = "";
 
 // Fixtures written by pyarrow / Python: a CSV with quoted commas, doubled quotes, unicode
 // and CRLF endings (~16 MB), a small second CSV, multi-row-group Parquet and JSON Lines.
 const FIXTURES = `
 import json, sys, pyarrow as pa, pyarrow.parquet as pq
+from fastavro import writer
 d=sys.argv[1]; n=int(sys.argv[2])
 with open(f'{d}/big.csv','w',encoding='utf-8',newline='') as f:
     f.write('id,name,note,amount\\r\\n')
@@ -37,6 +42,14 @@ pq.write_table(t,f'{d}/a.parquet',row_group_size=10000)
 pq.write_table(t.slice(0,7),f'{d}/b.parquet',row_group_size=2)
 with open(f'{d}/a.jsonl','w',encoding='utf-8',newline='') as f:
     for i in range(60000): f.write(json.dumps({'id':i,'tags':['é',i%3],'big':2**60+i,'o':{'k':i}})+'\\n')
+schema={'type':'record','name':'Event','fields':[{'name':'id','type':'long'},
+    {'name':'name','type':['null','string'],'default':None},
+    {'name':'nested','type':{'type':'array','items':'int'}},{'name':'big','type':'long'}]}
+def avro(name, ids):
+    with open(f'{d}/{name}','wb') as f:
+        writer(f,schema,({'id':i,'name':None if i%2 else chr(233),'nested':[i,i%3],'big':2**60+i} for i in ids),codec='deflate',sync_interval=8192)
+avro('a.avro',range(60000)); avro('b.avro',range(60000,60007))
+avro('inc.avro',[1,2]); avro('late.avro',[3]); avro('changed.avro',[9])
 `;
 
 async function sync(c: Conn, options: Record<string, unknown> = {}) {
@@ -52,6 +65,7 @@ describe.skipIf(!live || !S3.key || !S3.secret)(
     beforeAll(async () => {
       await h.setup();
       const dir = await mkdtemp(join(tmpdir(), "spark-files-"));
+      fixtureDir = dir;
       const py = spawnSync(
         process.env["PYTHON"] ?? "python3",
         ["-c", FIXTURES, dir, String(CSV_ROWS)],
@@ -68,8 +82,12 @@ describe.skipIf(!live || !S3.key || !S3.secret)(
         "a.parquet": "pq/a.parquet",
         "b.parquet": "pq/b.parquet",
         "a.jsonl": "jsonl/a.jsonl",
+        "a.avro": "avro/a.avro",
+        "b.avro": "avro/b.avro",
+        "inc.avro": "incremental/b.avro",
       };
       for (const f of await readdir(dir)) {
+        if (!place[f]) continue;
         const up = await h.db.storage.from(bucket).upload(place[f]!, await readFile(join(dir, f)), {
           contentType: "application/octet-stream",
         });
@@ -83,6 +101,7 @@ describe.skipIf(!live || !S3.key || !S3.secret)(
         version: string,
         format: string,
         prefix: string,
+        mode: "full_refresh" | "incremental" = "full_refresh",
       ) => {
         await h.secret(`files_${name}`, {
           endpoint,
@@ -103,7 +122,7 @@ describe.skipIf(!live || !S3.key || !S3.secret)(
             primary_key: "_file,_position",
             cursor_field: "_modified",
           },
-          "full_refresh",
+          mode,
         );
       };
       await make("csv", "spark-files-v1", "csv", "csv");
@@ -112,6 +131,9 @@ describe.skipIf(!live || !S3.key || !S3.secret)(
       await make("pqBase", "files-v1", "parquet", "pq");
       await make("jsonl", "spark-files-v1", "jsonl", "jsonl");
       await make("jsonlBase", "files-v1", "jsonl", "jsonl");
+      await make("avro", "spark-files-v1", "avro", "avro");
+      await make("avroBase", "files-v1", "avro", "avro");
+      await make("incremental", "files-v1", "avro", "incremental", "incremental");
     }, 1200000);
     afterAll(async () => {
       if (h.db) {
@@ -184,6 +206,54 @@ describe.skipIf(!live || !S3.key || !S3.secret)(
         v: "v199999",
         x: 24999.875,
         _position: 199999,
+      });
+    });
+
+    it("Avro container blocks run across executors and match standalone rows and keys", async () => {
+      const run = await sync(conn.avro, { range_bytes: 64 * 1024 });
+      expect(await h.run(run)).toMatchObject({ status: "succeeded", rows_committed: 60007 });
+      const { lines, manifests } = await h.landed(run);
+      expect(executors(manifests).size).toBeGreaterThanOrEqual(2);
+      const state = await h.state(conn.avro);
+      expect(state.spark.plan.length).toBeGreaterThan(2);
+      expect(state.spark.source).toMatch(/^[0-9a-f]{64}$/);
+      expect(new Set(lines.map((line) => JSON.stringify(line["primary_key"]))).size).toBe(60007);
+      expect(lines.find((line) => line.data["id"] === 12346)!.data).toMatchObject({
+        name: "é",
+        nested: [12346, 1],
+        big: "1152921504606859322",
+        _file: "avro/a.avro",
+        _position: 12346,
+      });
+      const base = await sync(conn.avroBase);
+      expect(await h.run(base)).toMatchObject({ status: "succeeded", rows_committed: 60007 });
+      expect(byKey(lines)).toEqual(byKey((await h.landed(base)).lines));
+    });
+
+    it("standalone incremental Avro skips unchanged objects, reads late keys and rejects replacements", async () => {
+      const initial = await sync(conn.incremental);
+      expect(await h.run(initial)).toMatchObject({ status: "succeeded", rows_committed: 2 });
+      expect((await h.landed(initial)).lines.map((line) => line.data["id"])).toEqual([1, 2]);
+      const unchanged = await sync(conn.incremental);
+      expect(await h.run(unchanged)).toMatchObject({ status: "succeeded", rows_committed: 0 });
+      const late = await h.db.storage
+        .from(bucket)
+        .upload("incremental/a.avro", await readFile(join(fixtureDir, "late.avro")));
+      if (late.error) throw late.error;
+      const appended = await sync(conn.incremental);
+      expect(await h.run(appended)).toMatchObject({ status: "succeeded", rows_committed: 1 });
+      expect((await h.landed(appended)).lines.map((line) => line.data["id"])).toEqual([3]);
+      const replacement = await h.db.storage
+        .from(bucket)
+        .upload("incremental/b.avro", await readFile(join(fixtureDir, "changed.avro")), {
+          upsert: true,
+        });
+      if (replacement.error) throw replacement.error;
+      const changed = await sync(conn.incremental);
+      expect(await h.run(changed)).toMatchObject({
+        status: "failed",
+        error_code: "source_changed",
+        rows_committed: 0,
       });
     });
 

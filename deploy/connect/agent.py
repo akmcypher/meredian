@@ -50,7 +50,10 @@ def source(module,command,config,stream=None,state=None,stop=None,deadline=None)
             if value is not None:
                 p=Path(tmp)/f'{name}.json'; p.write_text(json.dumps(value)); args+=['--'+name,str(p)]
         group={'creationflags':subprocess.CREATE_NEW_PROCESS_GROUP} if os.name=='nt' else {'start_new_session':True}
-        proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,**group)
+        # The parent owns all child scratch space, including file snapshots. A forced kill
+        # cannot run the actor's finally blocks; remove its files after the process tree dies.
+        child_env={**os.environ,'TMPDIR':tmp,'TEMP':tmp,'TMP':tmp}
+        proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,env=child_env,**group)
         fired=threading.Event(); done=threading.Event()
         def watchdog():
             while not done.wait(0.5):
@@ -120,9 +123,9 @@ def spark(claim, config_path, stop, deadline):
         if proc.wait()!=0: raise ActorError(code if code in SAFE else 'connector_failed',detail if code in REPORTED else None)
     finally:
         done.set(); kill_group(proc)
-def execute(claim):
-    config=str(Path(os.environ.get('CONNECT_SECRET_DIR','/run/secrets'))/(claim['credential_ref']+'.json'))
-    run=claim['run_id']; token=claim['lease_token']; stop=threading.Event(); lost=threading.Event()
+def execute(claim,cancel=None,config_override=None):
+    config=config_override or str(Path(os.environ.get('CONNECT_SECRET_DIR','/run/secrets'))/(claim['credential_ref']+'.json'))
+    run=claim['run_id']; token=claim['lease_token']; stop=threading.Event(); lost=cancel if cancel is not None else threading.Event()
     def heartbeat():
         ok_at=time.time(); wait=HEARTBEAT
         while not stop.wait(wait):
@@ -144,7 +147,7 @@ def execute(claim):
             messages=list(source(module,operation,config,stop=lost,deadline=deadline))
             if operation=='check' and not any(m.get('connectionStatus',{}).get('status')=='SUCCEEDED' for m in messages): raise ValueError('connector_failed')
             if operation=='discover': catalog=next(m['catalog']['streams'] for m in messages if m['type']=='CATALOG')
-        elif claim.get('task') and len(claim['streams'])==1 and claim['streams'][0].get('splittable'):
+        elif claim.get('task') and len(claim['streams'])==1 and claim['streams'][0].get('splittable') and not group_mode(claim,config):
             # The first task of a partitioned stream plans: one task per partition replaces it, and
             # the agent (and others) then claim those. The split ends this task's lease.
             stream=claim['streams'][0]
@@ -152,19 +155,30 @@ def execute(claim):
             shards=next(m['plan']['shards'] for m in messages if m['type']=='PLAN')
             post(BASE,{'action':'split','runId':run,'token':token,'shards':shards})
             return
-        elif claim.get('source_version','').startswith('spark-'):
+        elif (claim.get('source_version','').startswith('spark-') and
+              not (claim.get('source_version')=='spark-kafka-v1' and operation=='replay')):
             if operation not in ('sync','reset','backfill'): raise ValueError('connector_failed')
             spark(claim,config,lost,deadline)
         else:
+            # Kafka replay is already bounded by the server's selected payload budget.
+            # Spark Kafka uses this same fenced actor path to resolve dead letters, rather
+            # than submitting a distributed job that cannot acknowledge replayed IDs.
             command='replay' if operation=='replay' else 'read'
             for stream in claim['streams']:
                 if stream['completed']: continue
+                # SQL clears reset/backfill checkpoints and labels them full_refresh. Files
+                # must rebuild their content ledger so the next incremental sync can use it.
+                if claim.get('source_version')=='files-v1' and operation in ('reset','backfill'):
+                    stream={**stream,'sync_mode':'incremental'}
                 current=stream['id']
                 dest={**BASE,'run_id':run,'lease_token':token,'stream_id':stream['id'],'sequence':stream['sequence'],'state':stream['state'],'schema':stream.get('schema')}
-                for _ in write(dest,lagged(source(module,command,config,stream,stream['state'],stop=lost,deadline=deadline),run,token,stream['id'])):
+                stream_command='cleanup' if stream['state'].get('retirement',{}).get('status')=='pending' else command
+                for _ in write(dest,lagged(source(module,stream_command,config,stream,stream['state'],stop=lost,deadline=deadline),run,token,stream['id'])):
                     if lost.is_set(): raise ValueError('timeout')
+        if cancel is not None and cancel.is_set(): return
         post(BASE,{'action':'finish','runId':run,'token':token,'ok':True,'code':'ok',**({'catalog':catalog} if catalog is not None else {})})
     except Exception as e:
+        if cancel is not None and cancel.is_set(): return
         code=str(e) if str(e) in SAFE else 'connector_failed'
         if getattr(e,'detail',None):
             try: post(BASE,{'action':'report','runId':run,'token':token,'code':code,'detail':e.detail,**({'streamId':current} if current else {})})
@@ -172,6 +186,10 @@ def execute(claim):
         try: post(BASE,{'action':'finish','runId':run,'token':token,'ok':False,'code':code})
         except Exception: pass
     finally: stop.set();thread.join(timeout=2)
+def group_mode(claim, config):
+    if claim.get('source_version')!='kafka-v1': return False
+    with open(config) as f: return json.load(f).get('consumer_group') is True
+
 # Task claims hand out one stream of a run at a time, so slots (and other agents) work on a run's
 # streams in parallel. A server without task claims answers 400; the agent then claims whole runs.
 TASKS={'enabled':os.environ.get('CONNECT_TASKS','1')!='0'}
@@ -203,6 +221,26 @@ def main():
     slots=max(1,min(64,int(os.environ.get('CONNECT_SLOTS','1'))))
     base=re.sub(r'[^\w.:-]','-',os.environ.get('CONNECT_WORKER_ID') or f'{socket.gethostname()}-{os.getpid()}')[:180]
     IDENTITY.update(agent=base,slots=slots,version=AGENT_VERSION)
+    if os.environ.get('CONNECT_KAFKA_SHARED')=='1':
+        from kafka_shared import SharedGroup
+        while True:
+            try:
+                SharedGroup(os.environ.get('CONNECT_SECRET_DIR','/run/secrets'),
+                            lambda payload: post(BASE,payload,timeout=10),execute,base,
+                            slots=slots,once=os.environ.get('CONNECT_ONCE')=='1',
+                            connection_id=os.environ.get('CONNECT_GROUP_CONNECTION_ID'),
+                            identity=IDENTITY).run()
+                return
+            except Exception as error:
+                code=str(error) if str(error) in SAFE else 'source_unavailable'
+                try:
+                    import source_kafka as sk
+                    if isinstance(error,sk.KafkaException) and error.args:
+                        if error.args[0].code() in (sk.KafkaError._AUTHENTICATION,sk.KafkaError.SASL_AUTHENTICATION_FAILED,sk.KafkaError.GROUP_AUTHORIZATION_FAILED,sk.KafkaError.CLUSTER_AUTHORIZATION_FAILED,sk.KafkaError.TOPIC_AUTHORIZATION_FAILED,sk.KafkaError._SSL): code='auth_failed'
+                except (AttributeError,IndexError): pass
+                print(json.dumps({'type':'LOG','log':{'level':'ERROR','code':code}}),flush=True)
+                if os.environ.get('CONNECT_ONCE')=='1': raise SystemExit(1)
+                time.sleep(10)
     threads=[threading.Thread(target=loop,args=(f'{base}:{i}',),daemon=True) for i in range(slots)]
     for t in threads: t.start()
     for t in threads: t.join()

@@ -22,11 +22,20 @@ const suites = [
   { file: "deploy/connect/test_certify_mysql.py", path: ["deploy/connect"] },
   // Skips unless deploy/connect/certify.compose.yml is running (3 Kafka brokers + Karapace).
   { file: "deploy/connect/test_kafka.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_kafka_groups.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_kafka_shared.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_kafka_registry.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_kafka_registry_live.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_kafka_groups_live.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_retirement.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_retirement_live.py", path: ["deploy/connect"] },
   // Offline: managed Kafka profiles, object-store range splitting, Spark plans and security, CDC
   // decoding and positions.
   { file: "deploy/connect/test_kafka_profiles.py", path: ["deploy/connect"] },
   { file: "deploy/connect/test_files.py", path: ["deploy/connect"] },
   { file: "deploy/connect/test_spark_plan.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_spark_files_incremental.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_spark_commit.py", path: ["deploy/connect"] },
   { file: "deploy/connect/test_cdc.py", path: ["deploy/connect"] },
   { file: "deploy/connect/test_bronze_parquet.py", path: ["deploy/connect"] },
 ];
