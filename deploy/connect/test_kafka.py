@@ -311,6 +311,18 @@ class Backpressure(KafkaCluster):
 @unittest.skipUnless(reachable(),'Kafka certification cluster not running (deploy/connect/certify.compose.yml)')
 class AvroRegistry(KafkaCluster):
     config={'bootstrap_servers':BROKERS,'schema_registry_url':REGISTRY}
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Karapace's healthcheck only reads. Writes wait for its master election and _schemas topic,
+        # which can outlast one request on a fresh cluster, so wait until a write succeeds.
+        probe={'type':'record','name':'Ready','namespace':f'certify.ready{uuid.uuid4().hex[:8]}','fields':[]}
+        end=time.time()+120
+        while True:
+            try: register(f'certify-ready-{uuid.uuid4().hex[:8]}',probe); return
+            except OSError:
+                if time.time()>end: raise
+                time.sleep(2)
     def test_confluent_avro_decode_and_evolution(self):
         import decimal
         topic=self.topic(1); v1=register(f'{topic}-value',V1); v2=register(f'{topic}-value',V2)
