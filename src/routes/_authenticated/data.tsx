@@ -137,7 +137,7 @@ function DataPage() {
       rows: pending.rows.length,
       columns: pending.fields.map((f) => f.name),
     });
-    toast.success(`Table ${n} is ready — query it from notebooks`);
+    toast.success(`Table ${n} is ready`);
     setPending(null);
     qc.invalidateQueries({ queryKey: ["user_tables"] });
   };

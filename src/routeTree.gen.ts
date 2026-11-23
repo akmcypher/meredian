@@ -17,7 +17,6 @@ import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
 import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/audit'
-import { Route as AuthenticatedConnectionsRouteImport } from './routes/_authenticated/connections'
 import { Route as AuthenticatedDataRouteImport } from './routes/_authenticated/data'
 import { Route as AuthenticatedIngestRouteImport } from './routes/_authenticated/ingest'
 import { Route as AuthenticatedPartitionsRouteImport } from './routes/_authenticated/partitions'
@@ -70,12 +69,6 @@ const AuthenticatedAuditRoute = AuthenticatedAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedConnectionsRoute =
-  AuthenticatedConnectionsRouteImport.update({
-    id: '/connections',
-    path: '/connections',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedDataRoute = AuthenticatedDataRouteImport.update({
   id: '/data',
   path: '/data',
@@ -147,7 +140,6 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/audit': typeof AuthenticatedAuditRoute
-  '/connections': typeof AuthenticatedConnectionsRoute
   '/data': typeof AuthenticatedDataRoute
   '/ingest': typeof AuthenticatedIngestRoute
   '/partitions': typeof AuthenticatedPartitionsRoute
@@ -169,7 +161,6 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/audit': typeof AuthenticatedAuditRoute
-  '/connections': typeof AuthenticatedConnectionsRoute
   '/data': typeof AuthenticatedDataRoute
   '/ingest': typeof AuthenticatedIngestRoute
   '/partitions': typeof AuthenticatedPartitionsRoute
@@ -193,7 +184,6 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/approvals': typeof AuthenticatedApprovalsRoute
   '/_authenticated/audit': typeof AuthenticatedAuditRoute
-  '/_authenticated/connections': typeof AuthenticatedConnectionsRoute
   '/_authenticated/data': typeof AuthenticatedDataRoute
   '/_authenticated/ingest': typeof AuthenticatedIngestRoute
   '/_authenticated/partitions': typeof AuthenticatedPartitionsRoute
@@ -217,7 +207,6 @@ export interface FileRouteTypes {
     | '/admin'
     | '/approvals'
     | '/audit'
-    | '/connections'
     | '/data'
     | '/ingest'
     | '/partitions'
@@ -239,7 +228,6 @@ export interface FileRouteTypes {
     | '/admin'
     | '/approvals'
     | '/audit'
-    | '/connections'
     | '/data'
     | '/ingest'
     | '/partitions'
@@ -262,7 +250,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/approvals'
     | '/_authenticated/audit'
-    | '/_authenticated/connections'
     | '/_authenticated/data'
     | '/_authenticated/ingest'
     | '/_authenticated/partitions'
@@ -347,13 +334,6 @@ declare module '@tanstack/react-router' {
       path: '/audit'
       fullPath: '/audit'
       preLoaderRoute: typeof AuthenticatedAuditRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/connections': {
-      id: '/_authenticated/connections'
-      path: '/connections'
-      fullPath: '/connections'
-      preLoaderRoute: typeof AuthenticatedConnectionsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/data': {
@@ -448,7 +428,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedApprovalsRoute: typeof AuthenticatedApprovalsRoute
   AuthenticatedAuditRoute: typeof AuthenticatedAuditRoute
-  AuthenticatedConnectionsRoute: typeof AuthenticatedConnectionsRoute
   AuthenticatedDataRoute: typeof AuthenticatedDataRoute
   AuthenticatedIngestRoute: typeof AuthenticatedIngestRoute
   AuthenticatedPartitionsRoute: typeof AuthenticatedPartitionsRoute
@@ -461,7 +440,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedApprovalsRoute: AuthenticatedApprovalsRoute,
   AuthenticatedAuditRoute: AuthenticatedAuditRoute,
-  AuthenticatedConnectionsRoute: AuthenticatedConnectionsRoute,
   AuthenticatedDataRoute: AuthenticatedDataRoute,
   AuthenticatedIngestRoute: AuthenticatedIngestRoute,
   AuthenticatedPartitionsRoute: AuthenticatedPartitionsRoute,
@@ -488,13 +466,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

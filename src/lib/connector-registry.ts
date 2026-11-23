@@ -110,8 +110,7 @@ export const CONNECTORS: ConnectorDefinition[] = [
     "Iceberg-compatible catalogs",
   ].map((name) =>
     entry(name.toLowerCase(), name, "Warehouses and lakehouses", {
-      limitations:
-        "Some existing Connections offer query/catalog operations; these are not ingestion/sync adapters.",
+      limitations: "No ingestion adapter yet.",
       destination: "/connections",
     }),
   ),
