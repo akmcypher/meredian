@@ -14,6 +14,13 @@ const suites = [
   { file: "deploy/connect/test_bronze_reader.py", path: ["deploy/connect"] },
   // Real child processes: cancellation and deadlines kill the actor's whole process group.
   { file: "deploy/connect/test_agent.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_sqlserver.py", path: ["deploy/connect"] },
+  // Skips unless SQLSERVER_TEST_PORT/CA/SA_PASSWORD point at a TLS SQL Server engine.
+  { file: "deploy/connect/test_sqlserver_live.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_mongodb.py", path: ["deploy/connect"] },
+  // Skips unless MONGODB_TEST_PORT/CA/ROOT_PASSWORD point at a TLS replica set.
+  { file: "deploy/connect/test_mongodb_live.py", path: ["deploy/connect"] },
+  { file: "deploy/connect/test_mongodb_cdc_live.py", path: ["deploy/connect"] },
   { file: "deploy/connect/test_kafka_readiness.py", path: ["deploy/connect"] },
   { file: "deploy/connect/test_postgres.py", path: ["deploy/connect"], env: pg },
   // Conformance kit certification (deploy/connect/conformance.py) against live sources.

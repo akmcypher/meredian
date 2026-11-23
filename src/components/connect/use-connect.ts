@@ -14,7 +14,14 @@ import { assignConnectionPool, createPool, updatePool } from "@/lib/connect-pool
 import { createSource } from "@/lib/ingest.functions";
 import { PUBLIC_CONFIG_KEYS } from "@/lib/connect-setup";
 
-export const CONNECT_KINDS = ["postgres", "mysql", "kafka"] as const;
+export const CONNECT_KINDS = [
+  "postgres",
+  "mysql",
+  "sqlserver",
+  "oracle",
+  "mongodb",
+  "kafka",
+] as const;
 const SOURCE_SELECT = [
   "id",
   "name",

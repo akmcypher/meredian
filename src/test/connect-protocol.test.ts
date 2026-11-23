@@ -7,6 +7,25 @@ import {
   stateMessage,
 } from "@/lib/connect-protocol";
 describe("Connect protocol", () => {
+  it("keeps MongoDB change-stream resume tokens exactly and rejects malformed ones", () => {
+    const resume = {
+      _data: "8265A1B2C3000000012B022C0100296E5A1004",
+      _typeBits: { $binary: { base64: "AQI=", subType: "00" } },
+    };
+    const message = { type: "STATE", state: { version: 1, cdc: { phase: "stream", resume } } };
+    expect(stateMessage.parse(message).state.cdc).toEqual({ phase: "stream", resume });
+    for (const bad of [
+      { _data: "not hex" },
+      { _data: "82", extra: 1 },
+      { _data: "82", _typeBits: "AQI=" },
+    ])
+      expect(
+        stateMessage.safeParse({
+          type: "STATE",
+          state: { version: 1, cdc: { phase: "stream", resume: bad } },
+        }).success,
+      ).toBe(false);
+  });
   it("retains bounded object identities and resume positions in checkpoints", () => {
     const files = {
       version: 1,

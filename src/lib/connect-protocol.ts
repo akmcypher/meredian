@@ -166,6 +166,24 @@ export const stateMessage = z.object({
             })
             .optional(),
           server_id: z.number().int().min(1).max(4294967295).optional(),
+          // MongoDB: the change-stream resume token after the last landed event, as Extended JSON.
+          resume: z
+            .object({
+              _data: z.string().regex(/^[0-9A-Fa-f]{2,8192}$/),
+              _typeBits: z
+                .object({
+                  $binary: z
+                    .object({
+                      base64: z.string().regex(/^[A-Za-z0-9+/=]{0,1024}$/),
+                      subType: z.string().regex(/^[0-9a-f]{2}$/),
+                    })
+                    .strict(),
+                })
+                .strict()
+                .optional(),
+            })
+            .strict()
+            .optional(),
         })
         .optional(),
     })

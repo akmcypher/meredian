@@ -1,5 +1,12 @@
 psycopg[binary]==3.2.10
 PyMySQL[rsa]==1.1.1
+# SQL Server: pure Python TDS (MIT), full-session TLS (Apache-2.0).
+python-tds==1.17.1
+pyOpenSSL==26.4.0
+# Oracle (source_oracle.py): python-oracledb thin mode, UPL-1.0 OR Apache-2.0; needs cryptography.
+oracledb==26.1.0
+# MongoDB (source_mongodb.py): official driver, Apache-2.0; DNS seedlists via dnspython (ISC).
+pymongo==4.20.1
 # MySQL CDC (source_mysql_cdc.py): binlog reader, Apache-2.0.
 mysql-replication==1.0.17
 confluent-kafka==2.6.1
