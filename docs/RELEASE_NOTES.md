@@ -1,8 +1,12 @@
 # Meridian Community release notes
 
-## Unreleased (next preview)
+## Meridian Community Preview 0.4
 
-Demonstrated on a local stack (Spark items with a two-worker Spark cluster); not hosted or certified.
+Preview 0.4 is pre-release software for evaluation and feedback. It is not production-certified.
+Everything below was demonstrated on local stacks (Windows, Docker Desktop, a two-worker Spark
+cluster and a three-broker Kafka cluster); none of it is hosted or certified yet.
+
+### What is new
 
 - **Parquet Bronze parts from Spark:** with `CONNECT_SPARK_OPTIONS` `{"bronze_format": "parquet"}`,
   Spark runs land their Bronze parts as Parquet (layout `meridian-bronze-parquet/1`) instead of
@@ -44,10 +48,30 @@ Demonstrated on a local stack (Spark items with a two-worker Spark cluster); not
 - **Durable schedules:** scheduled runs are created by `POST /api/public/connect-tick` (bearer
   `CRON_SECRET`) from your own cron, not by agent polling. Missed intervals are coalesced into one
   run, and connections with an active run are skipped. Manual Sync works without a cron.
-- **Upgrading:** apply migrations 0106, 0108, 0109 (stream retirement), 0110 (scheduler), 0111
-  (shared Kafka), 0112 (Avro reader state), 0114 (connection lock order) and 0115 (finish lock
-  order), update the agents and the Spark image, and set up a cron for `/api/public/connect-tick`
-  if you use schedules. Without these options, existing connections behave as before.
+- **Fixes:** two lock-order deadlocks between agents claiming work and runs committing or finishing
+  (migrations 0114 and 0115).
+
+### Known limitations
+
+- CDC is tested on local PostgreSQL and MySQL only, not on managed cloud databases. MySQL positions
+  are binlog file and offset (no GTID yet).
+- The cursor connectors (`postgres-v1`, `mysql-v1`) still miss deletes; use CDC for those tables.
+- Incremental object-store files need immutable objects: a changed object stops the run. ADLS is
+  tested with local files only.
+- Spark does not join Kafka consumer groups; shared groups need a dedicated group per connection.
+- Spark on Kubernetes is tested on kind only and uses client mode (no Spark Operator).
+- Managed Kafka profiles are checked offline and against a local secured broker, not against the
+  hosted services.
+- Raw upsert/delete envelopes are retained as-is; no warehouse merge is applied.
+- Container images are not signed. Release archives are signed with Sigstore and carry SLSA
+  build provenance.
+
+### Upgrading from Preview 0.3
+
+Stop the web app and agents, then run `upgrade` with the updated package. It applies migrations
+0106 to 0115 (0107 and 0113 are not used); without the new options, existing connections behave as
+before. Then update the Connect agents and the Spark image, and set up a cron for
+`/api/public/connect-tick` if you use schedules.
 
 ## Meridian Community Preview 0.3
 

@@ -7,7 +7,7 @@ databases, event streams, files and APIs into one raw, append-only store, checks
 the way in, and lets your analytics tools read it safely. Your passwords and your network stay
 yours.
 
-[Download Preview 0.3](https://github.com/akmcypher/meredian/releases/tag/v0.3.0-preview) ·
+[Download Preview 0.4](https://github.com/akmcypher/meredian/releases/tag/v0.4.0-preview) ·
 [Full feature list](FEATURES.md) · Apache-2.0 · Windows, macOS and Linux
 
 ## How it works
@@ -38,7 +38,7 @@ flowchart LR
 | PostgreSQL                                               | Copy whole tables, or only rows that changed since last time.                                                                                                                                                                                                                       |
 | MySQL                                                    | The same full and incremental copies, with MySQL's own types handled exactly.                                                                                                                                                                                                       |
 | Kafka                                                    | Stream events from topics, including JSON, Debezium change events and Avro.                                                                                                                                                                                                         |
-| Cloud storage files                                      | CSV, TSV, JSON Lines and Parquet from AWS S3, Google Cloud Storage, MinIO or Cloudflare R2.                                                                                                                                                                                         |
+| Cloud storage files                                      | CSV, TSV, JSON Lines, Parquet and Avro from AWS S3, Google Cloud Storage, MinIO, Cloudflare R2 or Azure Data Lake Storage. Later runs read only new files; files already loaded are skipped.                                                                                        |
 | REST APIs                                                | Pull JSON from any HTTP endpoint straight from the web app.                                                                                                                                                                                                                         |
 | Push and upload                                          | Let your apps post records with a per-source key, or drag in CSV, Parquet, Avro or JSON files.                                                                                                                                                                                      |
 | **Spark versions** of PostgreSQL, MySQL, files and Kafka | When a table, bucket or topic is too large for one machine, the work is split across a cluster and read in parallel. Same results as the single-machine version, checked by tests on every change. Runs on a Spark cluster or on Kubernetes, with encrypted, authenticated traffic. |
@@ -79,6 +79,16 @@ These are test sizes on a local two-worker Spark cluster, not performance benchm
 - **Backpressure:** reads stay within memory limits, and long runs stop at a set size or time and
   continue next run.
 - **Schema registry:** Confluent Avro with schema evolution; tombstones kept as delete events.
+- **Consumer groups:** several agents can share one topic's partitions and hand them over without
+  duplicates; Meridian's own saved positions, not the broker's, decide where reading resumes.
+
+## Runs itself
+
+- **Worker pools:** a group of agents shares the work of many connections, so one large backfill
+  can't hold up the rest; each connection can cap how many tasks it runs at once.
+- **Schedules:** your own cron calls Meridian, which queues due runs even when no agent is online.
+- **Retire a stream:** stop ingesting it while keeping everything already landed; for PostgreSQL
+  CDC this also releases the database's change-log slot.
 
 ## Secure by default
 
@@ -93,7 +103,7 @@ These are test sizes on a local two-worker Spark cluster, not performance benchm
 ## Running locally in two commands
 
 Start Docker, download the package for your system from the
-[release](https://github.com/akmcypher/meredian/releases/tag/v0.3.0-preview), and run these in the
+[release](https://github.com/akmcypher/meredian/releases/tag/v0.4.0-preview), and run these in the
 extracted folder. The launcher fetches pinned, hash-checked tools for you.
 
 | System                       | Commands                                             |
@@ -119,13 +129,14 @@ the [connector developer guide](CONNECTOR_DEVELOPER_GUIDE.md).
 
 ## Where it stands
 
-Preview 0.3 is pre-release software for evaluation and feedback. Everything here runs on local
+Preview 0.4 is pre-release software for evaluation and feedback. Everything here runs on local
 machines and is covered by automated tests. It is not hosted or production-certified yet.
 
 - PostgreSQL and MySQL CDC are tested on local databases only, not on managed cloud databases.
 - Spark on Kubernetes and encrypted Spark traffic are tested on a local cluster only, not on a
   hosted one.
-- Cloud-storage files support full refresh only.
+- Azure Data Lake Storage is tested with local files only, not a live Azure account. Incremental
+  file loads expect files not to change after they are written.
 - Managed Kafka profiles are tested offline and against a local secured broker, not against the
   hosted services.
 
