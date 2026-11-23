@@ -3,6 +3,124 @@
 Open-source data ingestion with a web control plane. Bring data in from REST APIs, files,
 databases and streams, and retain immutable raw ingestion batches and their manifests.
 
+This is preview software. Read the [disclaimer](#meridian-community-preview--disclaimer) before
+you point it at data you care about.
+
+![Meridian Connect: a PostgreSQL connection with its streams](docs/images/connect-streams.png)
+
+## See it
+
+These screenshots come from a local Preview 0.4 installation running the
+[demo](#5-minute-quickstart) below. The data is generated sample data.
+
+| Connect wizard                                                                      | Worker pools                                                                              |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| ![New connection wizard, PostgreSQL settings step](docs/images/connect-wizard.png)  | ![Worker pool with one agent online](docs/images/worker-pools.png)                        |
+| You enter only non-secret settings. The password stays in a file on the agent host. | Agents started with a pool token share the work of every connection assigned to the pool. |
+
+**Bronze data.** Each committed batch can be inspected: Meridian verifies its checksum and shows
+the raw records, here an order from the sample `shop.orders` table.
+
+![A committed Bronze batch: checksum verified, raw records](docs/images/bronze-batch.png)
+
+## 5-minute quickstart
+
+From install to rows landed in Bronze, using a sample PostgreSQL database that the demo script
+starts for you. On our Windows 11 test machine, with Docker images already downloaded, the install
+took about 2.5 minutes and steps 2 to 7 about 4. A first install also downloads the images, which
+can take 10 minutes or more.
+
+You need Docker (on Docker Desktop, set Settings > Resources > Network > Port binding behavior to
+"Localhost by default") and Python 3.10 or later for the demo agent.
+
+**1. Install and start Meridian.**
+
+- Windows 11: download `meridian-<version>-windows.zip` from the
+  [latest release](../../releases), extract it, and in that folder run:
+
+  ```powershell
+  .\meridian.cmd install
+  .\meridian.cmd start
+  ```
+
+- macOS or Ubuntu/Debian: download `meridian-<version>-macos.tar.gz` or
+  `meridian-<version>-linux.tar.gz`, extract it, and run `./meridian install` then
+  `./meridian start`.
+- From source, with Node 26, Bun 1.4 and Supabase CLI 2.122:
+
+  ```sh
+  node scripts/self-host.mjs install
+  node scripts/self-host.mjs start
+  ```
+
+Release packages up to Preview 0.4 don't include the demo script yet. Copy
+[`scripts/demo.mjs`](scripts/demo.mjs) from this repository into the `scripts` folder of your
+installation. If the Windows launcher downloaded Node for you, `.\meridian.cmd status` shows its
+path; use that in place of `node` below.
+
+**2. Create an account.** Open http://localhost:8080 and choose **No account? Sign up**. Confirm
+the email in the local mail viewer the installer prints (http://localhost:58324 with the default
+ports), opening the link in the same browser. Finish the three onboarding steps.
+
+**3. Start the sample database.** In the installation folder run:
+
+```sh
+node scripts/demo.mjs source
+```
+
+It starts PostgreSQL on 127.0.0.1:55440 with 200 customers and 1,000 orders, creates a login that
+cannot change data, writes the agent's credential file to `.meridian/demo/shop.json`, and prints
+the values for the next step.
+
+**4. Register the connection.** Go to **Data Engineering > Meridian Connect > New connection**,
+choose **PostgreSQL**, then **Continue**. Enter the printed values:
+
+| Field                | Value                                                      |
+| -------------------- | ---------------------------------------------------------- |
+| Connection name      | `shop`                                                     |
+| Credential reference | `shop`                                                     |
+| Host                 | `127.0.0.1`                                                |
+| Port                 | `55440`                                                    |
+| Database             | `shop`                                                     |
+| User                 | `meridian_reader`                                          |
+| TLS (sslmode)        | `disable` (only because this demo database is on loopback) |
+
+Choose **Register connection**. Copy the agent token it shows; it is shown only once.
+
+**5. Start the agent.** In a second terminal, in the same folder:
+
+```sh
+node scripts/demo.mjs agent
+```
+
+Paste the token when asked (input is hidden). The first run creates a Python environment for the
+agent. Leave it running: it polls Meridian every 10 seconds.
+
+**6. Test, discover and choose streams.** In the wizard choose **Test connection**, then
+**Continue**, **Discover streams** (it finds `shop.customers` and `shop.orders`) and
+**Continue**. Select both streams, keep cursor `updated_at` and **Incremental (cursor)**, then
+**Save and continue** and **Save schedule and finish**.
+
+**7. Land the rows.** Choose **Sync now**. On the **Runs** tab the sync succeeds with 1,200
+rows. Under **Committed bronze batches**, choose **Inspect batch** to see the verified records.
+
+**8. Sync only what changed.** Run `node scripts/demo.mjs more` (25 new orders, 10 orders updated)
+and choose **Sync now** again. This sync lands 35 rows: only what changed after the saved cursor,
+not the whole table again.
+
+Optional: create a worker pool under **Worker pools**, assign `shop` to it on the connection's
+**Settings** tab, stop the agent and start it again with the pool token:
+`node scripts/demo.mjs agent --new-token`. Set `CONNECT_SLOTS=2` in the environment to let it run
+two tasks at once.
+
+**Clean up.** Stop the agent with Ctrl+C, then run `node scripts/demo.mjs down` to remove the
+sample database and the demo files. Your installation and its data are unchanged. Stop Meridian
+with `.\meridian.cmd stop` (or `./meridian stop`).
+
+What the demo does not show: Bronze holds append-only raw batches, not applied merges, and the
+PostgreSQL extractor reads by cursor, so deletes are not captured. See the
+[user guide](docs/USER_GUIDE.md) for real sources, Kafka and recovery.
+
 ## Project Naming Notice
 
 **Meridian** is the provisional name of this open-source community project. The project name,
@@ -60,7 +178,8 @@ New here? Read the [plain-language overview](docs/OVERVIEW.md). The full list is
 
 ## Run it
 
-Start with [QUICKSTART.md](QUICKSTART.md) and the [user guide](docs/USER_GUIDE.md).
+The [5-minute quickstart](#5-minute-quickstart) above is the shortest path. For operating an
+installation, read [QUICKSTART.md](QUICKSTART.md) and the [user guide](docs/USER_GUIDE.md).
 
 On Windows 11 (x64 or ARM64), download `meridian-<version>-windows.zip` from the release, start
 Docker Desktop, and run `.\meridian.cmd install` then `.\meridian.cmd start` in the extracted folder.

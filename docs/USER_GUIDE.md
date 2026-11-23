@@ -24,7 +24,7 @@ Create a Push source in **Ingestion**, retain its one-time token in your sender'
 
 ## PostgreSQL and MySQL
 
-These are **incremental extractors, not CDC**. Use a read-only source account reachable from the connector agent. Tables need a primary key and a non-null monotonic cursor for incremental extraction; updates that do not advance the cursor and row deletions are not captured.
+These are **incremental extractors, not CDC**. Use a read-only source account reachable from the connector agent. A PostgreSQL account needs `SELECT` and `REFERENCES` on the tables: discovery reads primary keys from `information_schema`, which hides them from accounts holding only `SELECT`, and without them no tables are found. `REFERENCES` grants no further reads or writes. Tables need a primary key and a non-null monotonic cursor for incremental extraction; updates that do not advance the cursor and row deletions are not captured.
 
 Create the appropriate source in **Ingestion**, then open **Connectors → Meridian Connect**. Register the connection against that source and an agent credential reference. The operator supplies the referenced private credential file to an agent (deploy/connect/README.md); credentials are not entered into ordinary connection JSON. Queue **Check credentials**, then **Discover streams**. Choose the discovered table, key, cursor and sync mode, save the stream and choose **Sync now**. Without a running agent these jobs stay queued; the web application does not run one itself.
 
