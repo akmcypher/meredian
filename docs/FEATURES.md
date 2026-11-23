@@ -3,25 +3,25 @@
 Meridian Community is open-source data ingestion with a web control plane: it brings data in from
 APIs, files, databases, object stores and streams, and keeps it as immutable, verifiable raw
 (Bronze) batches that other engines can read. This page lists everything in the current release,
-**Community Preview 0.3**.
+**Community Preview 0.4**.
 
 Status: pre-release. Everything here is demonstrated on local stacks and covered by automated
 tests; none of it is hosted or production-certified. See [known limitations](#known-limitations).
 
 ## Sources
 
-| Source                                                                            | How it runs                                                       | What it reads                                                                                            |
-| --------------------------------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| REST API                                                                          | Manual pull from the web app                                      | JSON responses from an HTTP endpoint                                                                     |
-| Push API                                                                          | Your system posts to `/api/public/ingest` with a per-source token | JSON records                                                                                             |
-| File upload                                                                       | Browser upload                                                    | CSV, TSV, Parquet, Avro, JSON, JSON Lines, NDJSON                                                        |
-| PostgreSQL (`postgres-v1`)                                                        | Connect agent                                                     | Tables, full refresh or incremental (cursor + primary key)                                               |
-| MySQL (`mysql-v1`)                                                                | Connect agent                                                     | Tables, full refresh or incremental (cursor + primary key)                                               |
-| PostgreSQL CDC (`postgres-cdc-v1`)                                                | Connect agent, logical replication                                | Every insert, update and delete, in commit order, after a first full copy                                |
-| MySQL CDC (`mysql-cdc-v1`)                                                        | Connect agent, binlog                                             | Every insert, update and delete, in commit order, after a first full copy                                |
-| Kafka (`kafka-v1`)                                                                | Connect agent, one task per partition                             | JSON, Debezium JSON, Confluent wire-format Avro                                                          |
+| Source                                                                            | How it runs                                                       | What it reads                                                                                                                                       |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| REST API                                                                          | Manual pull from the web app                                      | JSON responses from an HTTP endpoint                                                                                                                |
+| Push API                                                                          | Your system posts to `/api/public/ingest` with a per-source token | JSON records                                                                                                                                        |
+| File upload                                                                       | Browser upload                                                    | CSV, TSV, Parquet, Avro, JSON, JSON Lines, NDJSON                                                                                                   |
+| PostgreSQL (`postgres-v1`)                                                        | Connect agent                                                     | Tables, full refresh or incremental (cursor + primary key)                                                                                          |
+| MySQL (`mysql-v1`)                                                                | Connect agent                                                     | Tables, full refresh or incremental (cursor + primary key)                                                                                          |
+| PostgreSQL CDC (`postgres-cdc-v1`)                                                | Connect agent, logical replication                                | Every insert, update and delete, in commit order, after a first full copy                                                                           |
+| MySQL CDC (`mysql-cdc-v1`)                                                        | Connect agent, binlog                                             | Every insert, update and delete, in commit order, after a first full copy                                                                           |
+| Kafka (`kafka-v1`)                                                                | Connect agent, one task per partition                             | JSON, Debezium JSON, Confluent wire-format Avro                                                                                                     |
 | Object-store files (`files-v1`)                                                   | Connect agent                                                     | CSV, TSV, JSON Lines, Parquet and Avro under an S3-compatible prefix (AWS S3, GCS interoperability, MinIO, R2) or ADLS, full refresh or incremental |
-| Spark (`spark-postgres-v1`, `spark-mysql-v1`, `spark-files-v1`, `spark-kafka-v1`) | Spark cluster driven by the Connect agent                         | The same sources, read in parallel across executors                                                      |
+| Spark (`spark-postgres-v1`, `spark-mysql-v1`, `spark-files-v1`, `spark-kafka-v1`) | Spark cluster driven by the Connect agent                         | The same sources, read in parallel across executors                                                                                                 |
 
 Database, Kafka and object-store credentials stay on the agent host; the control plane never
 opens connections into your network.
