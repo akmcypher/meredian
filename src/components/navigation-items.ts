@@ -44,7 +44,7 @@ const SHELL: Section[] = [
     id: "compute",
     label: "Integrations & Compute",
     icon: Server,
-    items: [{ to: "/connections", label: "Connections", icon: Server, order: 10 }],
+    items: [],
   },
   {
     id: "administration",

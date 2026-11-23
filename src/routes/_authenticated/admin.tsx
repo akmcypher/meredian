@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -64,7 +64,7 @@ function AdminPage() {
       />
       <Tabs defaultValue="overview">
         <TabsList className="flex h-auto flex-wrap">
-          {["overview", "users", "organizations", "settings", "audit", "engines"].map((t) => (
+          {["overview", "users", "organizations", "settings", "audit"].map((t) => (
             <TabsTrigger key={t} value={t} className="capitalize">
               {t}
             </TabsTrigger>
@@ -89,9 +89,6 @@ function AdminPage() {
         </TabsContent>
         <TabsContent value="audit">
           <AdminAudit />
-        </TabsContent>
-        <TabsContent value="engines">
-          <Engines />
         </TabsContent>
         {MODULE_TABS.map((t) => (
           <TabsContent key={t.id} value={t.id}>
@@ -119,14 +116,10 @@ function Overview() {
         <Stat label="users" value={data.users} />
         <Stat label="tables / rows" value={`${data.tables} / ${data.rows.toLocaleString()}`} />
         <Stat label="storage (MB)" value={data.storageMb} />
-        <Stat label="connections" value={data.connections} />
         <Stat label="ingestion sources" value={data.ingestSources} />
       </div>
       {MODULES.map((m) => m.AdminOverview && <m.AdminOverview key={m.id} />)}
-      <p className="text-xs text-muted-foreground">
-        Counts come from the live database. Cluster and executor metrics appear once you run the
-        setup kit on your servers and connect them (Engines tab).
-      </p>
+      <p className="text-xs text-muted-foreground">Counts come from the live database.</p>
     </div>
   );
 }
@@ -525,38 +518,6 @@ function AdminAudit() {
         Entries cannot be edited or deleted; each one includes the previous entry's hash, so any
         tampering breaks the chain.
       </p>
-    </div>
-  );
-}
-
-function Engines() {
-  const { data = [] } = useQuery({
-    queryKey: ["connections"],
-    queryFn: async () =>
-      (await supabase.from("connections").select("id,name,kind,status,last_tested_at")).data ?? [],
-  });
-  return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        Spark, Trino, Flink, MLflow, MinIO and Iceberg run on your own servers using the setup kit
-        (in the project's <span className="font-mono">deploy/</span> folder). Once running, register
-        each endpoint on the Connections page and it shows here.
-      </p>
-      <Link to="/connections" className="text-sm text-primary underline">
-        Open Connections
-      </Link>
-      {data.map((c) => (
-        <div key={c.id} className="flex items-center gap-2 border p-2 text-sm">
-          <span className="font-semibold">{c.name}</span>
-          <Badge variant="outline">{c.kind}</Badge>
-          <Badge variant={c.status === "ok" ? "default" : "outline"}>
-            {c.status ?? "untested"}
-          </Badge>
-          <span className="ml-auto font-mono text-xs text-muted-foreground">
-            {c.last_tested_at ? new Date(c.last_tested_at).toLocaleString() : ""}
-          </span>
-        </div>
-      ))}
     </div>
   );
 }
