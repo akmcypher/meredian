@@ -22,5 +22,12 @@ Each account that signs up becomes the owner of its own workspace, not a platfor
 The installation operator creates the platform administrator with the service-only
 `bootstrap_platform_admin` function. Never expose its service credential to users or the browser.
 
+## Try it with sample data
+
+`node scripts/demo.mjs source` starts a sample PostgreSQL database next to your installation, and
+`node scripts/demo.mjs agent` runs a Connect agent for it. The README's
+[5-minute quickstart](README.md#5-minute-quickstart) walks from install to rows in Bronze with
+them; `node scripts/demo.mjs down` removes them again. Run them in the installation folder.
+
 Read the [user guide](docs/USER_GUIDE.md) for source walkthroughs, inspecting data, retries and
 limitations. Run one installation per trust boundary.
