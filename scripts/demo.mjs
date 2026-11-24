@@ -155,13 +155,11 @@ async function source() {
       await sleep(1000);
     }
     psql(SEED);
-    // A login that cannot change data, as a real source would have. Discovery reads primary
-    // keys from information_schema, which hides them from roles holding only SELECT, so the
-    // role also needs REFERENCES (it allows no reads or writes beyond SELECT).
+    // A login that cannot change data, as a real source would have.
     psql(
       `create role meridian_reader login password '${state.password}';
        grant usage on schema shop to meridian_reader;
-       grant select, references on all tables in schema shop to meridian_reader;`,
+       grant select on all tables in schema shop to meridian_reader;`,
     );
     writeFileSync(stateFile, JSON.stringify(state, null, 2), { mode: 0o600 });
   }

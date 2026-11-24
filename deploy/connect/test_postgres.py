@@ -13,7 +13,19 @@ class Contract(unittest.TestCase):
   cls.schema=next(s for s in discover(cls.conn) if s['namespace']=='connect_test' and s['name']=='customers')['json_schema']
   cls.stream={'namespace':'connect_test','name':'customers','primary_key':'id','cursor_field':'updated_at','sync_mode':'incremental','schema':cls.schema}
  @classmethod
- def tearDownClass(cls): cls.conn.execute('DROP SCHEMA connect_test CASCADE');cls.conn.commit();cls.conn.close()
+ def tearDownClass(cls): cls.conn.execute('DROP SCHEMA connect_test CASCADE');cls.conn.execute('DROP ROLE IF EXISTS connect_test_reader');cls.conn.commit();cls.conn.close()
+ def test_select_only_role_discovers_keys(self):
+  # information_schema hides key constraints from roles holding only SELECT; discovery must not.
+  c=self.conn;c.execute('DROP TABLE IF EXISTS connect_test.order_lines');c.execute('CREATE TABLE connect_test.order_lines(order_id int,line int,qty int NOT NULL,PRIMARY KEY(line,order_id))')
+  c.execute("DO $$BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='connect_test_reader') THEN CREATE ROLE connect_test_reader NOLOGIN; END IF; END$$")
+  c.execute('GRANT USAGE ON SCHEMA connect_test TO connect_test_reader');c.execute('GRANT SELECT ON ALL TABLES IN SCHEMA connect_test TO connect_test_reader');c.commit()
+  try:
+   c.execute('SET ROLE connect_test_reader')
+   self.assertFalse(c.execute("SELECT has_table_privilege('connect_test.customers','REFERENCES') AS r").fetchone()['r'])
+   streams={s['name']:s for s in discover(c) if s['namespace']=='connect_test'}
+  finally: c.rollback();c.execute('RESET ROLE');c.execute('DROP TABLE connect_test.order_lines');c.commit()
+  self.assertEqual(streams['customers']['primary_key'],'id');self.assertEqual(streams['customers']['json_schema'],self.schema)
+  self.assertEqual(streams['order_lines']['primary_key'],['line','order_id'])
  def test_check_discover(self):
   self.assertEqual(self.conn.execute('SELECT 1 as n').fetchone()['n'],1)
   self.assertEqual(next(s for s in discover(self.conn) if s['name']=='customers')['primary_key'],'id')

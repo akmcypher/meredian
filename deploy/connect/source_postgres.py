@@ -6,8 +6,11 @@ VERSION='postgres-v1'
 def connection(config):
     return connect(**config, row_factory=dict_row, connect_timeout=10)
 def discover(conn):
+    # Primary keys come from pg_catalog: information_schema.table_constraints/key_column_usage hide
+    # rows from roles holding only SELECT, which made read-only accounts discover no tables.
+    # array_position over conkey keeps composite-key order.
     rows=conn.execute("""SELECT c.table_schema,c.table_name,c.column_name,c.data_type,c.is_nullable,
-      (SELECT k.ordinal_position FROM information_schema.table_constraints t JOIN information_schema.key_column_usage k ON k.constraint_name=t.constraint_name AND k.constraint_schema=t.constraint_schema WHERE t.constraint_type='PRIMARY KEY' AND t.table_schema=c.table_schema AND t.table_name=c.table_name AND k.column_name=c.column_name) AS pk
+      (SELECT array_position(k.conkey,a.attnum) FROM pg_catalog.pg_constraint k JOIN pg_catalog.pg_class r ON r.oid=k.conrelid JOIN pg_catalog.pg_namespace n ON n.oid=r.relnamespace JOIN pg_catalog.pg_attribute a ON a.attrelid=r.oid AND a.attnum=ANY(k.conkey) WHERE k.contype='p' AND n.nspname=c.table_schema AND r.relname=c.table_name AND a.attname=c.column_name) AS pk
       FROM information_schema.columns c JOIN information_schema.tables t USING(table_schema,table_name) WHERE t.table_type='BASE TABLE' AND c.table_schema NOT IN ('pg_catalog','information_schema') ORDER BY c.table_schema,c.table_name,c.ordinal_position LIMIT 10000""").fetchall()
     grouped={}
     for r in rows:
