@@ -7,7 +7,7 @@
 // agent's private `<credential_ref>.json` (CONNECT_SECRET_DIR). The browser records only non-secret
 // settings and produces a template of that file in which every secret is a placeholder.
 
-export type ConnectSourceKind = "postgres" | "mysql" | "kafka";
+export type ConnectSourceKind = "postgres" | "mysql" | "sqlserver" | "oracle" | "mongodb" | "kafka";
 
 export type KafkaProfileId =
   | "confluent_cloud"
@@ -27,7 +27,8 @@ export interface SetupState {
   kind: ConnectSourceKind;
   name: string;
   credentialRef: string;
-  // PostgreSQL / MySQL
+  // PostgreSQL / MySQL / SQL Server / Oracle / MongoDB (host may list several MongoDB hosts;
+  // database is the Oracle service name)
   host: string;
   port: string;
   database: string;
@@ -38,6 +39,11 @@ export interface SetupState {
   // reads the tables of a publication the user creates.
   cdc: boolean;
   publication: string;
+  // Oracle: the schema (owner) whose tables are offered; empty means the user's own schema.
+  schema: string;
+  // MongoDB
+  replicaSet: string;
+  authSource: string;
   // Kafka
   bootstrapServers: string;
   kafkaMode:
@@ -60,13 +66,25 @@ export const initialSetup = (kind: ConnectSourceKind = "kafka"): SetupState => (
   name: "",
   credentialRef: "",
   host: "",
-  port: kind === "mysql" ? "3306" : "5432",
+  port:
+    kind === "mysql"
+      ? "3306"
+      : kind === "sqlserver"
+        ? "1433"
+        : kind === "oracle"
+          ? "2484"
+          : kind === "mongodb"
+            ? "27017"
+            : "5432",
   database: "",
   user: "",
   sslmode: "require",
   sslCa: "",
   cdc: false,
   publication: "meridian",
+  schema: "",
+  replicaSet: "",
+  authSource: "admin",
   bootstrapServers: "",
   kafkaMode: { type: "profile", profile: "confluent_cloud" },
   saslMechanism: "SCRAM-SHA-512",
@@ -94,6 +112,21 @@ export const SOURCE_KINDS: { id: ConnectSourceKind; label: string; summary: stri
     summary: "Tables by cursor or full refresh (no CDC yet).",
   },
   { id: "mysql", label: "MySQL", summary: "Tables by cursor or full refresh (no CDC yet)." },
+  {
+    id: "sqlserver",
+    label: "SQL Server",
+    summary: "Tables by cursor or full refresh over verified TLS (no CDC yet).",
+  },
+  {
+    id: "oracle",
+    label: "Oracle Database",
+    summary: "Tables by cursor or full refresh over verified TLS (TCPS; no CDC yet).",
+  },
+  {
+    id: "mongodb",
+    label: "MongoDB",
+    summary: "Collections by cursor, full refresh or change streams over verified TLS.",
+  },
 ];
 
 export interface KafkaProfile {
@@ -313,10 +346,31 @@ export function setupProblems(s: SetupState): string[] {
       "Credential reference: 1–80 letters, digits, '-' or '_'. It names the agent's private <reference>.json file.",
     );
   if (s.kind !== "kafka") {
+    if (s.kind === "sqlserver" && s.cdc) p.push("SQL Server CDC is not available yet.");
+    if (s.kind === "oracle") {
+      if (s.cdc) p.push("Oracle CDC is not available yet.");
+      if (/[@/()=\s]/.test(s.host.trim()))
+        p.push("Enter the Oracle host name only, not a connect descriptor or EZConnect string.");
+      if (s.database.trim() && !/^[A-Za-z0-9_.-]{1,128}$/.test(s.database.trim()))
+        p.push("Service name: 1–128 letters, digits, '.', '-' or '_'.");
+      if (s.schema.trim() && !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(s.schema.trim()))
+        p.push("Schema: letters, digits and '_', starting with a letter.");
+    }
+    if (s.kind === "mongodb") {
+      if (s.cdc && !s.replicaSet.trim())
+        p.push("Change streams need a replica set or sharded cluster: enter the replica set name.");
+      if (/[@/?#\s]/.test(s.host.trim()))
+        p.push("Enter MongoDB hosts as host or host1,host2 without credentials or options.");
+      if (s.replicaSet.trim() && !/^[A-Za-z0-9_.-]{1,64}$/.test(s.replicaSet.trim()))
+        p.push("Replica set: 1–64 letters, digits, '.', '-' or '_'.");
+      if (!/^[A-Za-z0-9_.-]{1,64}$/.test(s.authSource.trim()))
+        p.push("Authentication database: 1–64 letters, digits, '.', '-' or '_'.");
+    }
     if (!s.host.trim()) p.push("Enter the database host.");
     const port = Number(s.port);
     if (!Number.isInteger(port) || port < 1 || port > 65535) p.push("Port must be 1–65535.");
-    if (!s.database.trim()) p.push("Enter the database name.");
+    if (!s.database.trim())
+      p.push(s.kind === "oracle" ? "Enter the service name." : "Enter the database name.");
     if (!s.user.trim()) p.push("Enter the database user.");
     if (
       s.cdc &&
@@ -403,13 +457,32 @@ export function buildConfig(s: SetupState): {
       sslmode: s.sslmode,
     });
     if (s.cdc) pub["publication"] = s.publication.trim();
-  } else if (s.kind === "mysql") {
+  } else if (s.kind === "mysql" || s.kind === "sqlserver") {
     Object.assign(pub, {
       host: s.host.trim(),
       port: Number(s.port),
       database: s.database.trim(),
       user: s.user.trim(),
     });
+    if (s.sslCa.trim()) pub["ssl_ca"] = s.sslCa.trim();
+  } else if (s.kind === "oracle") {
+    Object.assign(pub, {
+      host: s.host.trim(),
+      port: Number(s.port),
+      service_name: s.database.trim(),
+      user: s.user.trim(),
+    });
+    if (s.schema.trim()) pub["schema"] = s.schema.trim();
+    if (s.sslCa.trim()) pub["ssl_ca"] = s.sslCa.trim();
+  } else if (s.kind === "mongodb") {
+    Object.assign(pub, {
+      hosts: s.host.trim(),
+      port: Number(s.port),
+      database: s.database.trim(),
+      user: s.user.trim(),
+      auth_source: s.authSource.trim() || "admin",
+    });
+    if (s.replicaSet.trim()) pub["replica_set"] = s.replicaSet.trim();
     if (s.sslCa.trim()) pub["ssl_ca"] = s.sslCa.trim();
   } else {
     const m = s.kafkaMode;
@@ -451,10 +524,15 @@ export const PUBLIC_CONFIG_KEYS = new Set([
   "port",
   "dbname",
   "database",
+  "service_name",
+  "schema",
   "user",
   "sslmode",
   "ssl_ca",
   "publication",
+  "hosts",
+  "replica_set",
+  "auth_source",
   "bootstrap_servers",
   "profile",
   "security_protocol",
@@ -509,14 +587,17 @@ export function setupFromStored(
   if (kind !== "kafka")
     return {
       ...s,
-      host: v("host"),
+      host: v(kind === "mongodb" ? "hosts" : "host"),
       port: v("port") || s.port,
-      database: v(kind === "postgres" ? "dbname" : "database"),
+      database: v(kind === "postgres" ? "dbname" : kind === "oracle" ? "service_name" : "database"),
       user: v("user"),
       sslmode: v("sslmode") || s.sslmode,
       sslCa: v("ssl_ca"),
-      cdc: !!v("publication"),
+      cdc: kind === "postgres" && !!v("publication"),
       publication: v("publication") || s.publication,
+      schema: v("schema"),
+      replicaSet: v("replica_set"),
+      authSource: v("auth_source") || s.authSource,
     };
   const protocol = v("security_protocol");
   const mechanism = (v("sasl_mechanism") || s.saslMechanism) as SaslMechanism;

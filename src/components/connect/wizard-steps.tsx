@@ -193,7 +193,12 @@ export function CredentialsStep({ setup, update }: { setup: SetupState; update: 
         <div className="grid gap-3 sm:grid-cols-2">
           <Text
             id="cw-host"
-            label="Host"
+            label={setup.kind === "mongodb" ? "Hosts" : "Host"}
+            hint={
+              setup.kind === "mongodb"
+                ? "One host, or replica set members as host1,host2 (no credentials or options)."
+                : undefined
+            }
             value={setup.host}
             onChange={(host) => update({ host })}
           />
@@ -205,7 +210,8 @@ export function CredentialsStep({ setup, update }: { setup: SetupState; update: 
           />
           <Text
             id="cw-db"
-            label="Database"
+            label={setup.kind === "oracle" ? "Service name" : "Database"}
+            hint={setup.kind === "oracle" ? "For example FREEPDB1 or ORCLPDB1." : undefined}
             value={setup.database}
             onChange={(database) => update({ database })}
           />
@@ -237,30 +243,88 @@ export function CredentialsStep({ setup, update }: { setup: SetupState; update: 
               onChange={(sslCa) => update({ sslCa })}
             />
           )}
-          <div className="space-y-2 sm:col-span-2">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="cw-cdc"
-                checked={setup.cdc}
-                onCheckedChange={(v) => update({ cdc: v === true })}
-              />
-              <Label htmlFor="cw-cdc">Read changes from the database log (CDC)</Label>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {setup.kind === "postgres"
-                ? "Captures inserts, updates and deletes. Needs wal_level=logical, a user with the REPLICATION attribute, and a publication listing the tables (CREATE PUBLICATION meridian FOR TABLE ...)."
-                : "Captures inserts, updates and deletes. Needs binlog_format=ROW, binlog_row_image=FULL, binlog_row_metadata=FULL, and a user with REPLICATION SLAVE and REPLICATION CLIENT."}
-            </p>
-            {setup.cdc && setup.kind === "postgres" && (
+          {setup.kind === "oracle" && (
+            <Text
+              id="cw-schema"
+              label="Schema (optional)"
+              hint="Owner of the tables to offer; defaults to the user's own schema."
+              value={setup.schema}
+              onChange={(schema) => update({ schema })}
+            />
+          )}
+          {setup.kind === "mongodb" && (
+            <>
               <Text
-                id="cw-publication"
-                label="Publication"
-                hint="An existing publication that includes every table you will sync."
-                value={setup.publication}
-                onChange={(publication) => update({ publication })}
+                id="cw-replica-set"
+                label="Replica set (optional)"
+                value={setup.replicaSet}
+                onChange={(replicaSet) => update({ replicaSet })}
               />
-            )}
-          </div>
+              <Text
+                id="cw-auth-source"
+                label="Authentication database"
+                value={setup.authSource}
+                onChange={(authSource) => update({ authSource })}
+              />
+            </>
+          )}
+          {setup.kind === "mongodb" ? (
+            <div className="space-y-2 sm:col-span-2">
+              <p className="text-xs text-muted-foreground">
+                TLS with certificate and hostname verification is required. Uses system trust when
+                no CA file is supplied. Documents land whole as Extended JSON.
+              </p>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="cw-cdc"
+                  checked={setup.cdc}
+                  onCheckedChange={(v) => update({ cdc: v === true })}
+                />
+                <Label htmlFor="cw-cdc">Read changes from change streams (CDC)</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Captures inserts, updates, replaces and deletes. Needs a replica set or sharded
+                cluster and a user with the read role (which includes changeStream) on the database.
+              </p>
+            </div>
+          ) : setup.kind === "oracle" ? (
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              TLS (TCPS, usually port 2484) with certificate and host name verification is required;
+              connect by the DNS name on the server certificate. Uses system trust when no CA file
+              is supplied. Full refresh and cursor-based incremental only; CDC is not available yet.
+            </p>
+          ) : setup.kind === "sqlserver" ? (
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Full-session TLS with hostname validation is required. Uses system trust when no CA
+              file is supplied. Full refresh and cursor-based incremental only; CDC is not available
+              yet.
+            </p>
+          ) : (
+            <div className="space-y-2 sm:col-span-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="cw-cdc"
+                  checked={setup.cdc}
+                  onCheckedChange={(v) => update({ cdc: v === true })}
+                />
+                <Label htmlFor="cw-cdc">Read changes from the database log (CDC)</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {setup.kind === "postgres"
+                  ? "Captures inserts, updates and deletes. Needs wal_level=logical, a user with the REPLICATION attribute, and a publication listing the tables (CREATE PUBLICATION meridian FOR TABLE ...)."
+                  : "Captures inserts, updates and deletes. Needs binlog_format=ROW, binlog_row_image=FULL, binlog_row_metadata=FULL, and a user with REPLICATION SLAVE and REPLICATION CLIENT."}
+              </p>
+              {setup.cdc && setup.kind === "postgres" && (
+                <Text
+                  id="cw-publication"
+                  label="Publication"
+                  hint="An existing publication that includes every table you will sync."
+                  value={setup.publication}
+                  onChange={(publication) => update({ publication })}
+                />
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">

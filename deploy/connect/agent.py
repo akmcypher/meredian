@@ -10,8 +10,8 @@ HEARTBEAT=float(os.environ.get('CONNECT_HEARTBEAT_SECONDS','20'))
 # for this long (the lease is then about to lapse anyway).
 LEASE_GRACE=float(os.environ.get('CONNECT_LEASE_GRACE_SECONDS','60'))
 BASE={'url':os.environ['MERIDIAN_URL'],'token_file':os.environ['INGEST_TOKEN_FILE']}
-# source_version 'postgres-v1' runs source_postgres.py. Only certified actors are listed.
-SOURCES={'postgres':'source_postgres.py','mysql':'source_mysql.py','kafka':'source_kafka.py','files':'source_files.py',
+# Source versions map to installed actors; catalogue records certification separately.
+SOURCES={'postgres':'source_postgres.py','mysql':'source_mysql.py','sqlserver':'source_sqlserver.py','oracle':'source_oracle.py','mongodb':'source_mongodb.py','mongodb-cdc':'source_mongodb_cdc.py','kafka':'source_kafka.py','files':'source_files.py',
   # CDC (README, "Change data capture"): the database's change log, streams in sync mode `cdc`.
   'postgres-cdc':'source_postgres_cdc.py','mysql-cdc':'source_mysql_cdc.py',
   # Spark ingestion (deploy/connect/README.md, "Spark ingestion"): check and discover use the source's

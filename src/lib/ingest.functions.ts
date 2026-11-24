@@ -49,7 +49,18 @@ export const createSource = createServerFn({ method: "POST" })
     z
       .object({
         name: z.string().min(1).max(80),
-        kind: z.enum(["rest", "postgres", "mysql", "kafka_cdc", "kafka", "s3", "adls"]),
+        kind: z.enum([
+          "rest",
+          "postgres",
+          "mysql",
+          "sqlserver",
+          "oracle",
+          "mongodb",
+          "kafka_cdc",
+          "kafka",
+          "s3",
+          "adls",
+        ]),
         target: z.string().min(1).max(60),
         config: z.record(z.string(), z.unknown()),
       })

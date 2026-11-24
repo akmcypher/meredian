@@ -114,11 +114,17 @@ export class SparkHarness {
       .from("ingest_sources")
       .insert({
         name,
-        kind: version.includes("mysql")
-          ? "mysql"
-          : version.includes("files")
-            ? "files"
-            : "postgres",
+        kind: version.includes("mongodb")
+          ? "mongodb"
+          : version.includes("sqlserver")
+            ? "sqlserver"
+            : version.includes("oracle")
+              ? "oracle"
+              : version.includes("mysql")
+                ? "mysql"
+                : version.includes("files")
+                  ? "files"
+                  : "postgres",
         owner_id: this.uid,
         target_table: `spark_${name}`,
         config: {},

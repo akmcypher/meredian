@@ -2,9 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { identifier, primaryKeySpec } from "./connect-protocol";
-const CONNECT_SOURCES = ["postgres", "mysql", "kafka"];
+const CONNECT_SOURCES = ["postgres", "mysql", "sqlserver", "oracle", "mongodb", "kafka"];
 // Sources that can read the database's change log (deploy/connect/README.md, "Change data capture").
-const CDC_SOURCES = ["postgres", "mysql"];
+const CDC_SOURCES = ["postgres", "mysql", "mongodb"];
 export const createConnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v: unknown) =>
@@ -24,12 +24,14 @@ export const createConnect = createServerFn({ method: "POST" })
       .select("*")
       .eq("id", data.sourceId)
       .maybeSingle();
-    // One actor per certified source kind (deploy/connect/agent.py SOURCES).
+    // One actor per supported source kind (deploy/connect/agent.py SOURCES).
     const kind = src.data?.kind ?? "";
     if (!src.data || src.data.owner_id !== context.userId || !CONNECT_SOURCES.includes(kind))
-      throw new Error("Choose your PostgreSQL, MySQL or Kafka ingestion source");
+      throw new Error(
+        "Choose your PostgreSQL, MySQL, SQL Server, Oracle, MongoDB or Kafka ingestion source",
+      );
     if (data.cdc && !CDC_SOURCES.includes(kind))
-      throw new Error("Change data capture is available for PostgreSQL and MySQL sources");
+      throw new Error("Change data capture is available for PostgreSQL, MySQL and MongoDB sources");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const r = await supabaseAdmin
       .from("connect_connections")

@@ -328,6 +328,185 @@ the implementation plan; runnable or skipped tests are not live certification.
 
 At-least-once extraction; idempotent committed run/stream/sequence. Canonical extraction timestamp currently equals run start for deterministic retry bytes. Raw operations labelled upsert describe source rows, not applied upserts: destination is append-only bronze. No CDC/deletes, late cursor regressions, snapshot consistency across restarts or mutable full-refresh exactly-once guarantee. Requires a monotonic non-null scalar cursor and a primary key (composite allowed). Schema drift fails, no quarantine/auto-evolve. Large values remain raw (bigint/decimal/time representations documented by source encoder). Source can change between checkpoint/commit and retry; conflicting bytes fail closed. Native Iceberg/Delta materialization, query-engine governance bridge, retention/deletion, alerts, searchable payload-free log drilldown, metrics/lag and tenant-level pools remain unfinished.
 
+## SQL Server
+
+`source_sqlserver.py` (`sqlserver-v1`) reads SQL Server tables with a primary key in
+full-refresh or incremental mode. CDC, deletes, integrated/Entra authentication and Spark
+execution are not implemented.
+
+- Every session is encrypted. The server certificate must chain to `ssl_ca` (or the system
+  trust store) and match the host. Hostname checking follows RFC 6125 and replaces the
+  driver's own check: SANs take precedence over the CN, an IP must match an IP SAN, and
+  only a single left-most wildcard label is allowed. A mismatch fails after the handshake
+  and before the login is sent.
+- The database must have `ALLOW_SNAPSHOT_ISOLATION ON`. Each read runs in one snapshot
+  transaction. Pages are ordered by (cursor, key) and seek with expanded composite
+  predicates. Binary keys and `rowversion` cursors are bound as `varbinary`.
+- `char`/`varchar` keys and cursors are compared as `varchar` under the column's own
+  collation. Comparing them as `nvarchar` would follow Unicode rules, which under `SQL_*`
+  collations order differently from the column (`co-op`, `con`) and skipped rows.
+- A reset or backfill runs the stream as a full refresh. Its checkpoint keeps the cursor
+  and the same binding hash, so the incremental runs after it continue from there.
+- Temporal values are converted on the server with ISO style 126. This keeps the seventh
+  fractional digit and a `datetimeoffset`'s own offset. Integers beyond 2^53 and decimals
+  travel as strings.
+- Row sizes are checked for a whole page before any value is fetched. A row over 512 KiB
+  fails the run with `record_too_large`, and its page emits nothing.
+- Unsupported column types and schema changes fail as `schema_drift`. A changed host,
+  database or login fails as `source_changed` until the stream is reset.
+
+Tests:
+
+- Offline contracts: `test_sqlserver.py`.
+- Engine tests: `test_sqlserver_live.py` covers types, ties, resume, rowversion, paging,
+  TLS CA/hostname/password failures, oversized rows, drift and snapshot isolation.
+- Agent to Bronze: `src/test/connect-sqlserver-agent.e2e.test.ts` covers fenced commits,
+  resume, an unchanged re-run, and a wrong CA leaving the checkpoint untouched.
+
+Both opt in with `SQLSERVER_TEST_PORT`, `SQLSERVER_TEST_CA`, `SQLSERVER_TEST_WRONG_CA` and
+`SQLSERVER_TEST_SA_PASSWORD` (`SQLSERVER_TEST_IPV6=1` adds a `[::1]` mismatch check). The
+local evidence ran on Azure SQL Edge 15.0 (ARM64), the SQL Server engine. SQL Server 2022
+images do not run under emulation on ARM64. This is engine evidence only, not SQL Server
+2022, Azure SQL Database or managed-instance certification.
+
+The offline and engine suites also pass inside the Linux agent image built from
+`Dockerfile.agent` (ARM64 build, non-root `65532`, Python 3.12, pyOpenSSL 26.4.0). The
+image's system trust store (`/usr/lib/ssl/cert.pem`) is used when `ssl_ca` is unset, but
+that path has not been exercised against a publicly trusted server. Hosted runs and an
+x86-64 image build are still pending.
+
+## MongoDB
+
+`source_mongodb.py` (`mongodb-v1`) reads collections of one database in full-refresh or
+incremental mode. Change streams, deletes, client-certificate (X.509) and LDAP/Kerberos
+authentication are not implemented.
+
+- Configuration takes `hosts` (one host or `host1,host2`), `port`, `database`, `user`,
+  `auth_source` (default `admin`) and optionally `replica_set`, `direct_connection`, `srv`
+  and `ssl_ca`. Hosts may not contain credentials, paths or URI options. The password stays
+  in the worker's credential file.
+- TLS is always on, with certificate and hostname verification. No "allow invalid"
+  setting is read. When `ssl_ca` is unset, system trust is used.
+- Documents land whole as MongoDB Extended JSON v2 (relaxed), so BSON types stay
+  visible (`$oid`, `$date`, `$numberDecimal`, `$binary`, ...). Integers outside ±(2^53−1)
+  keep their canonical `{"$numberLong": "…"}` form, so the control plane never rounds them.
+- Collections are schemaless. Discovery samples 100 documents per collection to list
+  top-level fields, so an owner can choose a cursor. New fields never fail a run. The key is
+  always `_id`. Databases and collections whose names are not plain identifiers are left
+  out of discovery, and their count is logged as `collections_skipped`.
+- Reads use majority read concern and seek on (cursor, `_id`). Because `$gt` only matches
+  values of the same BSON type family, a run first checks for documents whose cursor or
+  `_id` is missing or of another type. If any exist, the run fails as `schema_drift`
+  instead of skipping them. This check scans the collection, so index the cursor for
+  large collections.
+- A document over 512 KiB fails the run with `record_too_large`. A changed host, database,
+  user, auth database or replica set fails as `source_changed` until the stream is reset.
+- Full refresh (and a reset or backfill, which runs an incremental stream as one) reads in
+  `_id` order but still checks and records the cursor field. Its checkpoint keeps the same
+  binding, so the incremental runs after a reset continue from it.
+
+Tests:
+
+- Offline contracts: `test_mongodb.py`.
+- Live replica-set tests: `test_mongodb_live.py` covers TLS CA/password/hostname failures,
+  discovery, ties and resume, int/long cursors, single-document pages, stray-type refusal,
+  oversized documents and binding changes.
+- Agent to Bronze: `src/test/connect-mongodb-agent.e2e.test.ts` covers fenced Bronze,
+  resume, an unchanged re-run, and a wrong CA leaving the checkpoint untouched.
+
+Both opt in with `MONGODB_TEST_PORT`, `MONGODB_TEST_CA`, `MONGODB_TEST_WRONG_CA` and
+`MONGODB_TEST_ROOT_PASSWORD` (`MONGODB_TEST_IPV6=1` adds a `[::1]` mismatch check). The
+fixture is a TLS-only (`requireTLS`), authenticated single-member replica set `rs0` on
+MongoDB 8.0 (ARM64), advertised as `localhost:<port>`. This is local evidence only, not
+MongoDB Atlas or hosted certification.
+
+### MongoDB change streams
+
+`source_mongodb_cdc.py` (`mongodb-cdc-v1`, sync mode `cdc`) needs a replica set or a sharded
+cluster and a user with the `read` role on the database (which includes `changeStream`).
+
+- **First run or reset:** the actor opens a change stream to record a resume token, then
+  copies the collection by `_id` as `upsert` records, then reads changes from that token.
+  Changes made during the copy are read afterwards, so a document can land twice;
+  Bronze is append-only.
+- **Each run's window:** a run reads up to the deployment's latest write at the moment the
+  run starts (`hello.lastWrite`), then stops. It decides it is caught up from the cluster
+  time encoded in the stream's post-batch resume token.
+- **Change kinds:** inserts, updates and replaces land as `upsert` with the current document
+  (`fullDocument: updateLookup`). Deletes land as `delete` with `{_id}`. An update whose
+  document was deleted before the lookup is counted in `cdc_updates_superseded_by_delete`,
+  and its delete follows.
+- **Positions:** resume tokens are stored with each landed commit as Extended JSON
+  (`cdc.resume`, strictly validated by the control plane), never in MongoDB.
+- **Failures:**
+  - a drop, rename, `dropDatabase` or invalidate fails as `source_changed`;
+  - oplog history lost before the token fails as `offset_out_of_range` (reset to copy again);
+  - a stream-phase checkpoint without a token fails as `source_changed`.
+- **Not implemented:** pre/post images (`changeStreamPreAndPostImages`), and
+  database-wide or cluster-wide streams.
+
+Tests:
+
+- Live change streams: `test_mongodb_cdc_live.py` covers the copy, then every change kind;
+  an unchanged run; a retry replaying identical changes; superseded updates; drop; a
+  partial-copy resume; token decoding; and refusal of a standalone server.
+- Agent to Bronze: `src/test/connect-mongodb-cdc.e2e.test.ts`.
+
+Both use the same fixture and environment variables as the batch tests.
+
+## Oracle
+
+`source_oracle.py` (`oracle-v1`) reads Oracle Database tables with a primary key in
+full-refresh or incremental mode, using python-oracledb in thin mode (no Oracle Client
+libraries). CDC (LogMiner/XStream), deletes, Kerberos/wallet-based or external
+authentication and Spark execution are not implemented.
+
+- Every session uses TLS (TCPS, default port 2484). Thin mode has no native network
+  encryption, so plain TCP is refused. The server certificate must chain to `ssl_ca` (or
+  the system trust store), and `ssl_server_dn_match` is always on. python-oracledb matches
+  the certificate against the DNS host name, so connect by the name on the certificate:
+  an IP address is refused even when the certificate has a matching IP SAN.
+- `host` must be a bare host name. Connect descriptors, EZConnect strings and credentials
+  in the host are refused. `service_name` names the service (for example a PDB), and
+  `schema` is the owner whose tables are offered (default: the user's own schema). The
+  user needs `CREATE SESSION` and `SELECT` on each table; discovery reads `ALL_TAB_COLUMNS`,
+  so only granted tables are offered.
+- Each read is one `SET TRANSACTION READ ONLY` transaction (a consistent snapshot). Pages
+  are ordered by (cursor, key) and seek with expanded composite predicates. Seek values are
+  bound back to the column's own type (`TO_TIMESTAMP`, `TO_TIMESTAMP_TZ`, `TO_DATE`,
+  `HEXTORAW`).
+- Sessions use binary comparison and sorting (`NLS_COMP`/`NLS_SORT = BINARY`) and `.` as the
+  decimal separator, so instance NLS defaults cannot make seeks disagree with `ORDER BY`.
+- A reset or backfill runs the stream as a full refresh. Its checkpoint keeps the cursor
+  and the same binding hash, so the incremental runs after it continue from there.
+- Temporal values are converted on the server with `TO_CHAR` at nine fractional digits;
+  `TIMESTAMP WITH TIME ZONE` keeps its own offset, and sessions read `WITH LOCAL TIME ZONE`
+  values in UTC. `NUMBER` values arrive as decimals: whole numbers land as integers
+  (strings past 2^53), others as their exact decimal text. `RAW`/`BLOB` land as base64.
+- Row sizes (`VSIZE`, `DBMS_LOB.GETLENGTH`) are checked for a whole page before any value
+  is fetched. A row over 512 KiB fails the run with `record_too_large`, and its page emits
+  nothing.
+- Unsupported column types (for example `INTERVAL`, `XMLTYPE`, `LONG`, object types),
+  schema changes and revoked grants fail as `schema_drift`. A changed host, service, user
+  or port fails as `source_changed` until the stream is reset. Wrong passwords, locked
+  accounts, untrusted certificates and host name mismatches fail as `auth_failed`.
+
+Tests:
+
+- Offline contracts: `test_oracle.py`.
+- Engine tests: `test_oracle_live.py` covers types, ties, resume, RAW keys, DATE cursors,
+  single-row paging, TLS CA/host name/password failures, oversized rows, drift and a
+  revoked grant.
+- Agent to Bronze: `src/test/connect-oracle-agent.e2e.test.ts` covers fenced commits,
+  resume, an unchanged re-run, and a wrong CA leaving the checkpoint untouched.
+
+Both opt in with `ORACLE_TEST_PORT`, `ORACLE_TEST_CA`, `ORACLE_TEST_WRONG_CA` and
+`ORACLE_TEST_SYSTEM_PASSWORD` (`ORACLE_TEST_SERVICE` defaults to `FREEPDB1`;
+`ORACLE_TEST_IPV6=1` adds a `[::1]` mismatch check). The local evidence ran on Oracle AI
+Database 26ai Free 23.26.4 (`gvenzl/oracle-free`, ARM64) with a TCPS listener and an
+auto-login wallet holding a private test CA's server certificate. This is engine evidence
+only, not Enterprise Edition, RAC, Autonomous Database or managed-service certification.
+
 ## Release/runtime isolation
 
 Compose caps CPU/memory, drops caps, read-only FS and secrets mounts; no Docker daemon access. OCI source/destination images are not built/digest-pinned here. `release-check.sh` refuses mutable tags and requires cosign, trivy and syft; `image-lock.example.json` deliberately has null digests. `worker-job.yaml` is a non-deployable UNBUILT example requiring real digest, secrets and network policies. Namespace/pod-per-tenant scheduling, actual NetworkPolicy allowlists, signing/SBOM verification, CI certification and upgrade/rollback tests are release blockers, not delivered safety claims.

@@ -21,9 +21,15 @@ export function sourceKind(sourceVersion: string) {
       ? "PostgreSQL"
       : kind === "mysql"
         ? "MySQL"
-        : kind === "kafka"
-          ? "Kafka"
-          : kind;
+        : kind === "sqlserver"
+          ? "SQL Server"
+          : kind === "oracle"
+            ? "Oracle"
+            : kind === "mongodb"
+              ? "MongoDB"
+              : kind === "kafka"
+                ? "Kafka"
+                : kind;
   return isCdc(sourceVersion) ? `${name} CDC` : name;
 }
 

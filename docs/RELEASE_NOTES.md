@@ -1,5 +1,31 @@
 # Meridian Community release notes
 
+## Unreleased
+
+Demonstrated on local stacks only (Windows, Docker Desktop, ARM64 engine images); not hosted or
+certified.
+
+- **SQL Server (`sqlserver-v1`):** tables with a primary key, full refresh or incremental, through
+  the Connect agent. Every session is encrypted and the server certificate must match the host.
+  Reads run in one snapshot transaction, so the database needs `ALLOW_SNAPSHOT_ISOLATION ON`.
+  `datetime2` keeps all seven fractional digits and `datetimeoffset` its own offset. Character
+  keys seek under the column's own collation. Tested on Azure SQL Edge (the SQL Server engine on
+  ARM64), not yet on SQL Server 2022 or Azure SQL. No CDC yet.
+- **Oracle Database (`oracle-v1`):** tables with a primary key, full refresh or incremental, using
+  python-oracledb in thin mode (no Oracle Client install). TLS (TCPS, usually port 2484) is
+  required; connect by the host name on the server certificate. Each read is one read-only
+  transaction; timestamps keep nine fractional digits and their time zone. Tested on Oracle
+  Database Free 23.26 (26ai). No CDC yet.
+- **MongoDB (`mongodb-v1`):** collections as Extended JSON documents, full refresh or incremental
+  on a cursor field and `_id`, with majority reads and TLS always on. A document whose cursor or
+  `_id` is missing or of another type fails the run instead of being skipped.
+- **MongoDB change streams (`mongodb-cdc-v1`):** a first full copy, then every insert, update,
+  replace and delete from the change stream, resuming from the last committed token. A dropped,
+  renamed or invalidated collection, or history the server no longer holds, stops the stream
+  until it is reset. Needs a replica set or sharded cluster.
+- **Upgrade:** `self-host.mjs upgrade` applies migrations 0113, 0116 and 0117, which add the new
+  source kinds. Rebuild the agent image (`deploy/connect/Dockerfile.agent`) for the new drivers.
+
 ## Meridian Community Preview 0.4
 
 Preview 0.4 is pre-release software for evaluation and feedback. It is not production-certified.
