@@ -18,6 +18,8 @@ class Contract(unittest.TestCase):
   # information_schema hides key constraints from roles holding only SELECT; discovery must not.
   c=self.conn;c.execute('DROP TABLE IF EXISTS connect_test.order_lines');c.execute('CREATE TABLE connect_test.order_lines(order_id int,line int,qty int NOT NULL,PRIMARY KEY(line,order_id))')
   c.execute("DO $$BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='connect_test_reader') THEN CREATE ROLE connect_test_reader NOLOGIN; END IF; END$$")
+  # The test user may hold CREATEROLE without superuser (Supabase): it needs membership to SET ROLE.
+  c.execute('GRANT connect_test_reader TO current_user')
   c.execute('GRANT USAGE ON SCHEMA connect_test TO connect_test_reader');c.execute('GRANT SELECT ON ALL TABLES IN SCHEMA connect_test TO connect_test_reader');c.commit()
   try:
    c.execute('SET ROLE connect_test_reader')
