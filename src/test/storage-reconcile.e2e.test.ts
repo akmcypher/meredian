@@ -122,7 +122,7 @@ describe.skipIf(!url || !service)("Ingestion storage reconciliation", { timeout:
         k(`published/${ids[2]}/manifest.json`),
       ].sort(),
     );
-    expect(r.kept).toEqual({ referenced: 1, young: 0, active: 2, foreign: 1 });
+    expect(r.kept).toEqual({ referenced: 1, young: 0, active: 2, foreign: 1, fenced: 0 });
     expect(await exists(`dead-letters/${finishedRun}/b.ndjson`)).toBe(true);
     const log = await db
       .from("storage_reconciliation_log")
@@ -186,5 +186,28 @@ describe.skipIf(!url || !service)("Ingestion storage reconciliation", { timeout:
       "landing",
       "manifest",
     ]);
+  });
+
+  it("decides each candidate under the writer lock, so a fence keeps it out of the report", async () => {
+    // The prefilter knows nothing of fences; only the locked check can exclude this object.
+    const key = k(`dead-letters/${finishedRun}/b.ndjson`);
+    const reconcileRun = crypto.randomUUID();
+    const fenced = await db.rpc("storage_fence_object", {
+      _key: key,
+      _kind: "dead_letter",
+      _reconcile_run: reconcileRun,
+    });
+    expect(fenced.error).toBeNull();
+    expect(fenced.data).toBeNull();
+    const r = await reconcileIngestStorage(db, { apply: false, minAgeHours: 0, owners: [uid] });
+    expect(r.orphans.map((o) => o.key)).not.toContain(key);
+    expect(r.kept.fenced).toBe(1);
+    const released = await db.rpc("storage_release_fence", {
+      _key: key,
+      _reconcile_run: reconcileRun,
+    });
+    expect(released.data).toBe(true);
+    const after = await reconcileIngestStorage(db, { apply: false, minAgeHours: 0, owners: [uid] });
+    expect(after.orphans.map((o) => o.key)).toContain(key);
   });
 });

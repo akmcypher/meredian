@@ -6,7 +6,11 @@
 //   - it belongs to a Connect run that is still queued, running or waiting to retry, or its owner
 //     has such a run (landing objects);
 //   - it cannot be shown to be an ingestion object (other features also write under published/).
-// Destructive apply is disabled until registrations and deletion share writer exclusion.
+// The checks above are a prefilter. Every candidate is then decided again under the key's
+// writer lock (storage_reconcile_check, migration 0124): a registration that committed after the
+// prefilter, a fence or a writer run that became active keeps the object. Destructive apply stays
+// disabled; when it is enabled it must fence each key with storage_fence_object, delete the
+// object, then release the fence, never delete on this dry-run decision.
 // Every candidate is written to storage_reconciliation_log; storage is never mutated.
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -14,12 +18,18 @@ const BUCKET = "ingest-files";
 const ACTIVE = ["queued", "running", "retry_wait"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Kind = "dead_letter" | "landing" | "manifest";
-type Obj = { key: string; kind: Kind; bytes: number | null; createdAt: string | null };
+type Obj = {
+  key: string;
+  kind: Kind;
+  bytes: number | null;
+  createdAt: string | null;
+  writerRun?: string;
+};
 export type ReconcileResult = {
   runId: string;
   dryRun: boolean;
   orphans: Obj[];
-  kept: { referenced: number; young: number; active: number; foreign: number };
+  kept: { referenced: number; young: number; active: number; foreign: number; fenced: number };
   deleted: number;
   failed: number;
 };
@@ -96,7 +106,7 @@ export async function reconcileIngestStorage(
   const owners =
     opts.owners ??
     (await list(db, "")).filter((e) => e.id === null && UUID.test(e.name)).map((e) => e.name);
-  const kept = { referenced: 0, young: 0, active: 0, foreign: 0 };
+  const kept = { referenced: 0, young: 0, active: 0, foreign: 0, fenced: 0 };
   const orphans: Obj[] = [];
   for (const owner of owners) {
     if (!UUID.test(owner)) throw new Error("owner must be a user id");
@@ -161,10 +171,26 @@ export async function reconcileIngestStorage(
           kept.active++;
           continue;
         }
+        o.writerRun = m.run_id!;
       }
       orphans.push(o);
     }
   }
+  // The decision that counts: under the key lock, from committed state at this moment.
+  const decided: Obj[] = [];
+  for (const o of orphans) {
+    const r = await db.rpc("storage_reconcile_check", {
+      _key: o.key,
+      _kind: o.kind,
+      ...(o.writerRun ? { _writer_run: o.writerRun } : {}),
+    });
+    if (r.error) throw new Error("storage reconcile check failed");
+    const reason = r.data as keyof ReconcileResult["kept"] | null;
+    if (reason === null) decided.push(o);
+    else if (reason in kept) kept[reason]++;
+    else throw new Error("unknown keep reason");
+  }
+  orphans.splice(0, orphans.length, ...decided);
   for (let i = 0; i < orphans.length; i += 100) {
     const log = await db.from("storage_reconciliation_log").insert(
       orphans.slice(i, i + 100).map((o) => ({
